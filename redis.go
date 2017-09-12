@@ -1,4 +1,4 @@
-package redis
+package redisl
 
 import (
 	"context"
@@ -48,9 +48,9 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	//pipe := h.client.Pipeline()
 
 	// Check for duplicates with a bulk request
-	var ids [len(items)]string
-	for i, item := range items {
-		ids[i] = item.ID.(string)
+	var ids []string
+	for _, item := range items {
+		ids = append(ids, item.ID.(string))
 	}
 	duplicates, err := h.client.Exists(ids...).Result()
 	if err != nil {
@@ -95,30 +95,30 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	//		break
 	//	}
 	//}
-	return error("j")
+	return fmt.Errorf("j")
 }
 
 // Update replace an item by a new one in Redis
 func (h Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
-	return error("j")
+	return fmt.Errorf("j")
 }
 
 // Delete deletes an item from Redis
 func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
-	return error("j")
+	return fmt.Errorf("j")
 }
 
 // Clear clears all items from Redis matching the query
 func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
-	return 0, error("j")
+	return 0, fmt.Errorf("j")
 }
 
 // Find items from Redis matching the provided query
 func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
-	return &resource.ItemList{}, error("j")
+	return &resource.ItemList{}, fmt.Errorf("j")
 }
 
 // Count counts the number items matching the lookup filter
 func (h Handler) Count(ctx context.Context, query *query.Query) (int, error) {
-	return 0, error("j")
+	return 0,fmt.Errorf("j")
 }

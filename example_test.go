@@ -1,15 +1,17 @@
-package redis_test
+package redisl_test
 
 import (
 	"log"
 	"net/http"
+	"fmt"
+
+	"github.com/go-redis/redis"
+	"github.com/kolotaev/rest-layer-redis"
 
 	"github.com/rs/cors"
-	"github.com/rs/rest-layer-mongo"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/rest"
 	"github.com/rs/rest-layer/schema"
-	"gopkg.in/mgo.v2"
 )
 
 var (
@@ -68,19 +70,22 @@ var (
 )
 
 func Example() {
-	session, err := mgo.Dial("")
+	client := redis.NewClient(&redis.Options{
+		Addr:     "lamp:6379",
+	})
+
+	_, err := client.Ping().Result()
 	if err != nil {
-		log.Fatalf("Can't connect to MongoDB: %s", err)
+		fmt.Println(err)
 	}
-	db := "test_rest_layer"
 
 	index := resource.NewIndex()
 
-	users := index.Bind("users", user, mongo.NewHandler(session, db, "users"), resource.Conf{
+	users := index.Bind("users", user, redisl.NewHandler(client, "users", user), resource.Conf{
 		AllowedModes: resource.ReadWrite,
 	})
 
-	users.Bind("posts", "user", post, mongo.NewHandler(session, db, "posts"), resource.Conf{
+	users.Bind("posts", "user", post, redisl.NewHandler(client, "posts", post), resource.Conf{
 		AllowedModes: resource.ReadWrite,
 	})
 
