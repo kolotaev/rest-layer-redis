@@ -67,6 +67,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 			return fmt.Errorf("Insert error on item %#v", item)
 		}
 	}
+
 	//// Apply context deadline if any
 	//if t := ctxTimeout(ctx); t != "" {
 	//	bulk.Timeout(t)
