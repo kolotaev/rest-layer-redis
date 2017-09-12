@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
+	"github.com/rs/rest-layer/schema"
 	"github.com/rs/rest-layer/schema/query"
 )
 
@@ -13,13 +14,15 @@ import (
 type Handler struct {
 	client *redis.Client
 	entityName string
+	schema schema.Schema
 }
 
 // NewHandler creates a new redis handler
-func NewHandler(client *redis.Client, entityName string) *Handler {
+func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
 	return &Handler{
-		client: client,
+		client: c,
 		entityName: entityName,
+		schema: schema,
 	}
 }
 
@@ -42,11 +45,27 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 
 // Insert inserts new items in the Redis database
 func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
-	pipe := h.client.Pipeline()
+	//pipe := h.client.Pipeline()
+
+	// Check for duplicates with a bulk request
+	var ids [len(items)]string
+	for i, item := range items {
+		ids[i] = item.ID.(string)
+	}
+	duplicates, err := h.client.Exists(ids...).Result()
+	if err != nil {
+		return err
+	}
+	if duplicates > 0 {
+		return fmt.Errorf("Insert error: duplicate keys")
+	}
 
 	for _, item := range items {
-		key, value  := h.newRedisItem(item)
-		pipe.HMSet(key, value)
+		key, value := h.newRedisItem(item)
+		err := h.client.HMSet(key, value).Err()
+		if err != nil {
+			return fmt.Errorf("Insert error on item %#v", item)
+		}
 	}
 	//// Apply context deadline if any
 	//if t := ctxTimeout(ctx); t != "" {
