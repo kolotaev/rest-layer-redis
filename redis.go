@@ -26,7 +26,7 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 	}
 }
 
-// newRedisItem converts a resource.Item into a suitable for go-redis HMSet key and value
+// newRedisItem converts a resource.Item into a suitable for go-redis HMSet key and value pair
 func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
 	key := fmt.Sprintf("%s:%s", h.entityName, i.ID)
 
@@ -37,8 +37,9 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 			value[k] = v
 		}
 	}
-	value["etag"] = i.ETag
-	value["updated"] = i.ETag
+	value["__id__"] = i.ID
+	value["__etag__"] = i.ETag
+	value["__updated__"] = i.Updated
 
 	return key, value
 }
