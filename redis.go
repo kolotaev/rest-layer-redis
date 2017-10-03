@@ -76,11 +76,6 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 	return &resource.ItemList{}, fmt.Errorf("j")
 }
 
-// Count counts the number items matching the lookup filter
-func (h Handler) Count(ctx context.Context, query *query.Query) (int, error) {
-	return 0,fmt.Errorf("j")
-}
-
 // newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
 func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
 	// Filter out id from the payload so we don't store it twice
