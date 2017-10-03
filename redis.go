@@ -8,7 +8,6 @@ import (
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/rs/rest-layer/schema/query"
-	"time"
 )
 
 // Handler handles resource storage in Redis.
@@ -27,7 +26,7 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 	}
 }
 
-// newRedisItem converts a resource.Item into a suitable for go-redis HMSet key and value pair
+// newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
 func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
 	key := fmt.Sprintf("%s:%s", h.entityName, i.ID)
 
