@@ -26,51 +26,33 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 	}
 }
 
-// newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
-func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
-	key := fmt.Sprintf("%s:%s", h.entityName, i.ID)
-
-	// Filter out id from the payload so we don't store it twice
-	value := map[string]interface{}{}
-	for k, v := range i.Payload {
-		if k != "id" {
-			value[k] = v
-		}
-	}
-	value["__id__"] = i.ID
-	value["__etag__"] = i.ETag
-	value["__updated__"] = i.Updated
-
-	return key, value
-}
-
 // Insert inserts new items in the Redis database
 func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
-	//pipe := h.client.Pipeline()
-	// Check for duplicates with a bulk request
-	var ids []string
-	for _, item := range items {
-		ids = append(ids, item.ID.(string))
-	}
-	duplicates, err := h.client.Exists(ids...).Result()
-	if err != nil {
-		return err
-	}
-	if duplicates > 0 {
-		return fmt.Errorf("Insert error: duplicate keys")
-	}
-
-	for _, item := range items {
-		key, value := h.newRedisItem(item)
-		err := h.client.HMSet(key, value).Err()
-		if err != nil {
-			return fmt.Errorf("Insert error on item %#v", item)
+	err := handleWithContext(ctx, func() error {
+		//pipe := h.client.Pipeline()
+		// Check for duplicates with a bulk request
+		var ids []string
+		for _, item := range items {
+			ids = append(ids, h.redisItemKey(item))
 		}
-	}
+		duplicates, err := h.client.Exists(ids...).Result()
+		if err != nil {
+			return err
+		}
+		if duplicates > 0 {
+			return resource.ErrConflict
+		}
 
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
+		for _, item := range items {
+			key, value := h.newRedisItem(item)
+			err := h.client.HMSet(key, value).Err()
+			if err != nil {
+				return fmt.Errorf("Insert error on item %#v", item)
+			}
+		}
+		return err
+	})
+
 	return err
 }
 
@@ -99,20 +81,42 @@ func (h Handler) Count(ctx context.Context, query *query.Query) (int, error) {
 	return 0,fmt.Errorf("j")
 }
 
+// newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
+func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
+	// Filter out id from the payload so we don't store it twice
+	value := map[string]interface{}{}
+	for k, v := range i.Payload {
+		if k != "id" {
+			value[k] = v
+		}
+	}
+	value["__id__"] = i.ID
+	value["__etag__"] = i.ETag
+	value["__updated__"] = i.Updated
+
+	return h.redisItemKey(i), value
+}
+
+// redisItemKey creates a redis-compatible string key from and for the resource item.
+func (h *Handler) redisItemKey(i *resource.Item) string {
+	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
+}
+
 // handleWithContext makes requests to Redis aware of context.
 // Additionally it checks if we already have context error before proceeding further.
 // Rationale: redis-go actually doesn't support context abortion on its operations, though it has WithContext() client.
 // See: https://github.com/go-redis/redis/issues/582
 func handleWithContext(ctx context.Context, handler func() error) error {
-	if err := ctx.Err(); err != nil {
+	var err error
+
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 
-	var err error
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		err = handler()
-		close(done)
 	}()
 
 	select {
