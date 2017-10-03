@@ -8,6 +8,7 @@ import (
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/rs/rest-layer/schema/query"
+	"time"
 )
 
 // Handler handles resource storage in Redis.
@@ -47,7 +48,6 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 // Insert inserts new items in the Redis database
 func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	//pipe := h.client.Pipeline()
-
 	// Check for duplicates with a bulk request
 	var ids []string
 	for _, item := range items {
@@ -69,34 +69,10 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		}
 	}
 
-	//// Apply context deadline if any
-	//if t := ctxTimeout(ctx); t != "" {
-	//	bulk.Timeout(t)
-	//}
-	//
-	//_, err := pipe.Exec()
-	//
-	//// Set the refresh flag to true if requested
-	//bulk.Refresh(h.Refresh)
-	//res, err := bulk.Do(ctx)
-	//if err != nil {
-	//	if !translateError(&err) {
-	//		err = fmt.Errorf("insert error: %v", err)
-	//	}
-	//} else if res.Errors {
-	//	for i, f := range res.Failed() {
-	//		// CAVEAT on a bulk insert, if some items are in error, the
-	//		// operation is not atomic and the request will partially succeed. I
-	//		// don't see how to perform atomic bulk insert with ES.
-	//		if isConflict(f.Error) {
-	//			err = resource.ErrConflict
-	//		} else {
-	//			err = fmt.Errorf("insert error on item #%d: %#v", i+1, f.Error)
-	//		}
-	//		break
-	//	}
-	//}
-	return fmt.Errorf("j")
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
 }
 
 // Update replace an item by a new one in Redis
@@ -122,4 +98,31 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 // Count counts the number items matching the lookup filter
 func (h Handler) Count(ctx context.Context, query *query.Query) (int, error) {
 	return 0,fmt.Errorf("j")
+}
+
+// handleWithContext makes requests to Redis aware of context.
+// Additionally it checks if we already have context error before proceeding further.
+// Rationale: redis-go actually doesn't support context abortion on its operations, though it has WithContext() client.
+// See: https://github.com/go-redis/redis/issues/582
+func handleWithContext(ctx context.Context, handler func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	var err error
+	done := make(chan struct{})
+	go func() {
+		err = handler()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Monitor context cancellation. cancellation may happen if the client closed the connection
+		// or if the configured request timeout has been reached.
+		return ctx.Err()
+	case <-done:
+		// Wait until Redis command finishes.
+		return err
+	}
 }
