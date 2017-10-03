@@ -14,15 +14,26 @@ import (
 type Handler struct {
 	client *redis.Client
 	entityName string
-	schema schema.Schema
+	sortable []string
+	filterable []string
 }
 
 // NewHandler creates a new redis handler
 func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
+	var sortable, filterable []string
+	for k, v := range schema.Fields {
+		if v.Sortable {
+			sortable = append(sortable, k)
+		}
+		if v.Filterable {
+			filterable = append(filterable, k)
+		}
+	}
 	return &Handler{
 		client: c,
 		entityName: entityName,
-		schema: schema,
+		sortable: sortable,
+		filterable: filterable,
 	}
 }
 
