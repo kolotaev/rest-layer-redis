@@ -22,6 +22,9 @@ type Handler struct {
 func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
 	var sortable, filterable []string
 	for k, v := range schema.Fields {
+		if k == "id" {
+			continue
+		}
 		if v.Sortable {
 			sortable = append(sortable, k)
 		}
@@ -40,7 +43,6 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 // Insert inserts new items in the Redis database
 func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	err := handleWithContext(ctx, func() error {
-		//pipe := h.client.Pipeline()
 		// Check for duplicates with a bulk request
 		var ids []string
 		for _, item := range items {
@@ -54,13 +56,19 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 			return resource.ErrConflict
 		}
 
+		pipe := h.client.Pipeline()
+		// Add hash-records
 		for _, item := range items {
 			key, value := h.newRedisItem(item)
-			err := h.client.HMSet(key, value).Err()
-			if err != nil {
-				return fmt.Errorf("Insert error on item %#v", item)
+			pipe.HMSet(key, value)
+		}
+		// Add secondary indices for filterable fields
+		for _, item := range items {
+			for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
+				pipe.SAdd(redisKey, h.redisItemKey(item))
 			}
 		}
+		_, err = pipe.Exec()
 		return err
 	})
 
@@ -101,6 +109,19 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	value["__updated__"] = i.Updated
 
 	return h.redisItemKey(i), value
+}
+
+// newRedisSecondaryIndexItem creates a secondary index for a resource's filterable fields,
+// Is used so that we can find them when needed.
+func (h *Handler) newRedisSecondaryIndexItems(i *resource.Item) []string {
+	var result []string
+	for _, field := range h.filterable {
+		if value, ok := i.Payload[field]; ok {
+			result = append(result, fmt.Sprintf("%s:%s:%s", h.entityName,  field, value))
+		}
+	}
+
+	return result
 }
 
 // redisItemKey creates a redis-compatible string key from and for the resource item.
