@@ -1,4 +1,4 @@
-package redisl_test
+package rds_test
 
 import (
 	"log"
@@ -81,11 +81,11 @@ func Example() {
 
 	index := resource.NewIndex()
 
-	users := index.Bind("users", user, redisl.NewHandler(client, "users", user), resource.Conf{
+	users := index.Bind("users", user, rds.NewHandler(client, "users", user), resource.Conf{
 		AllowedModes: resource.ReadWrite,
 	})
 
-	users.Bind("posts", "user", post, redisl.NewHandler(client, "posts", post), resource.Conf{
+	users.Bind("posts", "user", post, rds.NewHandler(client, "posts", post), resource.Conf{
 		AllowedModes: resource.ReadWrite,
 	})
 

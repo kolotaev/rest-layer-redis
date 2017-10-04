@@ -1,4 +1,4 @@
-package redisl
+package rds
 
 import (
 	"context"
