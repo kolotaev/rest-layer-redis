@@ -49,6 +49,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 			ids = append(ids, h.redisItemKey(item))
 		}
 		duplicates, err := h.client.Exists(ids...).Result()
+		// TODO: is it real not found???
 		if err != nil {
 			return err
 		}
@@ -75,7 +76,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	return err
 }
 
-// Update replace an item by a new one in Redis
+// Update updates item properties in Redis
 func (h Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
 	err := handleWithContext(ctx, func() error {
 		key, value := h.newRedisItem(item)
@@ -85,6 +86,7 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		if err != nil {
 			return resource.ErrNotFound
 		}
+		// TODO: original?
 		if current[0] != original.ETag {
 			return resource.ErrConflict
 		}
@@ -103,7 +105,28 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 
 // Delete deletes an item from Redis
 func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
-	return fmt.Errorf("j")
+	err := handleWithContext(ctx, func() error {
+		key, _ := h.newRedisItem(item)
+
+		current, err := h.client.HMGet(key, "__etag__").Result()
+		// TODO: is it real not found???
+		if err != nil {
+			return resource.ErrNotFound
+		}
+		if current[0] != item.ETag {
+			return resource.ErrConflict
+		}
+
+		pipe := h.client.Pipeline()
+		pipe.HDel(h.redisItemKey(item))
+		for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
+			pipe.SRem(redisKey)
+		}
+		_, err = pipe.Exec()
+		return err
+	})
+
+	return err
 }
 
 // Clear clears all items from Redis matching the query
