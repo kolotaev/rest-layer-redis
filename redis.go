@@ -12,9 +12,9 @@ import (
 
 // Handler handles resource storage in Redis.
 type Handler struct {
-	client *redis.Client
+	client     *redis.Client
 	entityName string
-	sortable []string
+	sortable   []string
 	filterable []string
 }
 
@@ -33,9 +33,9 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		}
 	}
 	return &Handler{
-		client: c,
+		client:     c,
 		entityName: entityName,
-		sortable: sortable,
+		sortable:   sortable,
 		filterable: filterable,
 	}
 }
@@ -77,7 +77,28 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 
 // Update replace an item by a new one in Redis
 func (h Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
-	return fmt.Errorf("j")
+	err := handleWithContext(ctx, func() error {
+		key, value := h.newRedisItem(item)
+
+		current, err := h.client.HMGet(key, "__etag__").Result()
+		// TODO: is it real not found???
+		if err != nil {
+			return resource.ErrNotFound
+		}
+		if current[0] != original.ETag {
+			return resource.ErrConflict
+		}
+
+		pipe := h.client.Pipeline()
+		pipe.HMSet(key, value)
+		for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
+			pipe.SAdd(redisKey, h.redisItemKey(item))
+		}
+		_, err = pipe.Exec()
+		return err
+	})
+
+	return err
 }
 
 // Delete deletes an item from Redis
@@ -117,7 +138,7 @@ func (h *Handler) newRedisSecondaryIndexItems(i *resource.Item) []string {
 	var result []string
 	for _, field := range h.filterable {
 		if value, ok := i.Payload[field]; ok {
-			result = append(result, fmt.Sprintf("%s:%s:%s", h.entityName,  field, value))
+			result = append(result, fmt.Sprintf("%s:%s:%s", h.entityName, field, value))
 		}
 	}
 
