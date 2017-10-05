@@ -1,9 +1,9 @@
 package rds_test
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-	"fmt"
 
 	"github.com/go-redis/redis"
 	"github.com/kolotaev/rest-layer-redis"
@@ -71,7 +71,7 @@ var (
 
 func Example() {
 	client := redis.NewClient(&redis.Options{
-		Addr:     "lamp:6379",
+		Addr: "127.0.0.1:6379",
 	})
 
 	_, err := client.Ping().Result()
