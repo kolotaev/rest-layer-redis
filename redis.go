@@ -136,7 +136,7 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 
 // Find items from Redis matching the provided query
 func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
-	return &resource.ItemList{}, fmt.Errorf("j")
+
 }
 
 // newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
