@@ -93,6 +93,7 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 
 		pipe := h.client.Pipeline()
 		pipe.HMSet(key, value)
+		// Todo: delete an old key from set!
 		for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
 			pipe.SAdd(redisKey, h.redisItemKey(item))
 		}
@@ -136,7 +137,22 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 
 // Find items from Redis matching the provided query
 func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
-
+	//result := &resource.ItemList{Total: -1, Offset: offset, Limit: limit, Items: []*resource.Item{}}
+	//var result *resource.ItemList
+	//
+	//err := handleWithContext(ctx, func() error {
+	//	q, err := getLuaQuery()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	qs := redis.NewScript(q)
+	//	err = qs.Run(h.client, []string{}, "value").Err()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	res := qs.Exec();
+	//})
+	return nil, fmt.Errorf("j")
 }
 
 // newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
