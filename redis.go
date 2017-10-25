@@ -21,6 +21,7 @@ type Handler struct {
 // NewHandler creates a new redis handler
 func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
 	var sortable, filterable []string
+
 	for k, v := range schema.Fields {
 		if k == "id" {
 			continue
@@ -187,6 +188,10 @@ func (h *Handler) newRedisSecondaryIndexItems(i *resource.Item) []string {
 // redisItemKey creates a redis-compatible string key from and for the resource item.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
+}
+
+func zSetKey(entity, key string) string {
+	return fmt.Sprintf("%s:%s", entity, key)
 }
 
 // handleWithContext makes requests to Redis aware of context.
