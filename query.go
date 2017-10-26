@@ -33,7 +33,7 @@ func getField(f string) string {
 }
 
 func (q *Query) tmpKey() string {
-	return fmt.Sprintf("tmp.%s.%d.%d", q.entityName, rand.Int(), time.Now())
+	return fmt.Sprintf("tmp.%s.%d.%d.%d", q.entityName, getGoRoutineID(), rand.Int(), time.Now())
 }
 
 func (q *Query) translatePredicate(q query.Predicate) (string, error) {
@@ -70,7 +70,6 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 		case query.Equal:
 			key := q.tmpKey()
 			tempKeys = append(tempKeys, key)
-
 			if isNumeric(t.Value) {
 				b[key] = fmt.Sprintf(`
 				redis.call('SADD', %s, unpack(redis.call('ZRANGEBYSCORE', %s, %d, %d)))
