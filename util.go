@@ -8,6 +8,7 @@ import (
 
 // Obtain go-routine ID.
 // It's not the best practice to use goroutine's id but in our case it's justifiable.
+// ToDo: is it performant and reliable?
 func getGoRoutineID() uint64 {
 	b := make([]byte, 64)
 	b = b[:runtime.Stack(b, false)]

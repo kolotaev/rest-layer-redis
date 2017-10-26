@@ -72,15 +72,26 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 			tempKeys = append(tempKeys, key)
 			if isNumeric(t.Value) {
 				b[key] = fmt.Sprintf(`
-				redis.call('SADD', %s, unpack(redis.call('ZRANGEBYSCORE', %s, %d, %d)))
+				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, %d)))
 				`, key, zKey(q.entityName, t.Field), t.Value, t.Value)
 			} else {
 				b[key] = fmt.Sprintf(`
-				redis.call('SADD', %s, unpack(redis.call("SMEMBERS", %s)))
+				redis.call('SADD', '%s', unpack(redis.call("SMEMBERS", '%s')))
 				`, key, sKey(q.entityName, t.Field, t.Value))
 			}
 		case query.NotEqual:
-			b[getField(t.Field)] = bson.M{"$ne": t.Value}
+			key := q.tmpKey()
+			tempKeys = append(tempKeys, key)
+			if isNumeric(t.Value) {
+				b[key] = fmt.Sprintf(`
+				redis.call('ZUNIONSTORE', '%s', 1, '%s')
+				redis.call('ZREMRANGEBYSCORE', '%s', %d, %d)
+				`, key, zKey(q.entityName, t.Field), key, t.Value, t.Value)
+			} else {
+				b[key] = fmt.Sprintf(`
+				 redis.call('SDIFFSTORE', '%s', '%s', '%s')
+				`, key, sIDsKey(q.entityName), sKey(q.entityName, t.Field, t.Value))
+			}
 		case query.GreaterThan:
 			b[getField(t.Field)] = bson.M{"$gt": t.Value}
 		case query.GreaterOrEqual:
