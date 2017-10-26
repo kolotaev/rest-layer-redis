@@ -112,12 +112,14 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 			key := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', -inf, '(%d')))
+				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '-inf', '(%d')))
 				`, key, zKey(q.entityName, t.Field), t.Value)
 		case query.LowerOrEqual:
-			b[getField(t.Field)] = bson.M{"$lte": t.Value}
-		case query.Regex:
-			nil, resource.ErrNotImplemented
+			key := q.tmpKey()
+			tempKeys = append(tempKeys, key)
+			b[key] = fmt.Sprintf(`
+				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '-inf', %d)))
+				`, key, zKey(q.entityName, t.Field), t.Value)
 		default:
 			return nil, resource.ErrNotImplemented
 		}
