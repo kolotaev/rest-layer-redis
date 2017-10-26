@@ -23,8 +23,9 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 	var sortable, filterable []string
 
 	for k, v := range schema.Fields {
+		// ID is always filterable - needed for queries.
 		if k == "id" {
-			continue
+			filterable = append(filterable, k)
 		}
 		if v.Sortable {
 			sortable = append(sortable, k)
