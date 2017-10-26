@@ -190,8 +190,12 @@ func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
 }
 
-func zSetKey(entity, key string) string {
+func zKey(entity, key string) string {
 	return fmt.Sprintf("%s:%s", entity, key)
+}
+
+func sKey(entity, key string, value interface{}) string {
+	return fmt.Sprintf("%s:%s:%s", entity, key, value)
 }
 
 // handleWithContext makes requests to Redis aware of context.

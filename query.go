@@ -32,7 +32,7 @@ func getField(f string) string {
 	return f
 }
 
-func (q *Query) generateTmpKey() string {
+func (q *Query) tmpKey() string {
 	return fmt.Sprintf("tmp.%s.%d.%d", q.entityName, rand.Int(), time.Now())
 }
 
@@ -68,16 +68,18 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 		case query.NotIn:
 			return nil, resource.ErrNotImplemented
 		case query.Equal:
-			key := generateTmpKey()
+			key := q.tmpKey()
 			tempKeys = append(tempKeys, key)
+
 			if isNumeric(t.Value) {
-				b[getField(t.Field)] = t.Value
+				b[key] = fmt.Sprintf(`
+				redis.call('SADD', %s, unpack(redis.call('ZRANGEBYSCORE', %s, %d, %d)))
+				`, key, zKey(q.entityName, t.Field), t.Value, t.Value)
 			} else {
-				b[getField(t.Field)] = `
-				redis.call("SMEMBERS", )
-				`
+				b[key] = fmt.Sprintf(`
+				redis.call('SADD', %s, unpack(redis.call("SMEMBERS", %s)))
+				`, key, sKey(q.entityName, t.Field, t.Value))
 			}
-			b[getField(t.Field)] = t.Value
 		case query.NotEqual:
 			b[getField(t.Field)] = bson.M{"$ne": t.Value}
 		case query.GreaterThan:
