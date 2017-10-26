@@ -6,6 +6,7 @@ import (
 	"time"
 	"math/rand"
 	"fmt"
+	"strings"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -15,8 +16,8 @@ type Query struct {
 
 // Determine if value is numeric.
 // Numerics are all ints, floats, time values.
-func isNumeric(v query.Value) bool {
-	switch v.(type) {
+func isNumeric(v ...query.Value) bool {
+	switch v[0].(type) {
 	case int, float64, time.Time:
 		return true
 	default:
@@ -36,12 +37,11 @@ func (q *Query) tmpKey() string {
 	return fmt.Sprintf("tmp.%s.%d.%d.%d", q.entityName, getGoRoutineID(), rand.Int(), time.Now().UnixNano())
 }
 
-func (q *Query) translatePredicate(q query.Predicate) (string, error) {
+func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interface{}, error) {
 	var tempKeys []string
-	ps := make([]string, 0)
 	var b map[string]interface{}
 
-	for _, exp := range q {
+	for _, exp := range predicate {
 		switch t := exp.(type) {
 		case query.And:
 			s := []bson.M{}
@@ -64,7 +64,25 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 			}
 			b["$or"] = s
 		case query.In:
-			return nil, resource.ErrNotImplemented
+			key := q.tmpKey()
+			auxKey1 := q.tmpKey()
+			tempKeys = append(tempKeys, key, auxKey1)
+			if len(t.Values) == 0 {
+
+			}
+			if isNumeric(t.Values) {
+				ins := fmt.Sprintf("{" + strings.Repeat("%d", len(t.Values)) + "}", t.Values)
+				b[key] = fmt.Sprintf(`
+				redis.call('SADD', '%s', unpack(%s))
+				redis.call('SI', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, %d)))
+				`, auxKey1, ins, key, zKey(q.entityName, t.Field), t.Value, t.Value)
+			} else {
+				ins := fmt.Sprintf("{" + strings.Repeat("%d", len(t.Values)) + "}", t.Values)
+				b[key] = fmt.Sprintf(`
+				redis.call('SADD', '%s', unpack(%s))
+				redis.call('SI', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, %d)))
+				`, auxKey1, ins, key, zKey(q.entityName, t.Field), t.Value, t.Value)
+			}
 		case query.NotIn:
 			return nil, resource.ErrNotImplemented
 		case query.Equal:
@@ -100,6 +118,9 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 			// ERR Error running script (call to f_9512e9c187ff6b9cfea6ac955a5dbc07eb6b964a):
 			// @user_script:1: @user_script: 1: Wrong number of args calling Redis command From Lua script
 			b[key] = fmt.Sprintf(`
+				if (string.len(x) >= 1) then
+					...
+				end
 				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '(%d', '+inf')))
 				`, key, zKey(q.entityName, t.Field), t.Value)
 		case query.GreaterOrEqual:
