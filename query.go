@@ -93,7 +93,15 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 				`, key, sIDsKey(q.entityName), sKey(q.entityName, t.Field, t.Value))
 			}
 		case query.GreaterThan:
-			b[getField(t.Field)] = bson.M{"$gt": t.Value}
+			key := q.tmpKey()
+			tempKeys = append(tempKeys, key)
+			// todo: if zrange returns nil elements? the same for above
+			// eval "redis.call('SADD', 'zset2-out-nil', unpack(redis.call('ZRANGEBYSCORE', 'zset2', 2000, '+inf')))" 0 0
+			// ERR Error running script (call to f_9512e9c187ff6b9cfea6ac955a5dbc07eb6b964a):
+			// @user_script:1: @user_script: 1: Wrong number of args calling Redis command From Lua script
+			b[key] = fmt.Sprintf(`
+				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '(%d', '+inf')))
+				`, key, zKey(q.entityName, t.Field), t.Value)
 		case query.GreaterOrEqual:
 			b[getField(t.Field)] = bson.M{"$gte": t.Value}
 		case query.LowerThan:
