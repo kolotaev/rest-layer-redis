@@ -103,7 +103,11 @@ func (q *Query) translatePredicate(q query.Predicate) (string, error) {
 				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '(%d', '+inf')))
 				`, key, zKey(q.entityName, t.Field), t.Value)
 		case query.GreaterOrEqual:
-			b[getField(t.Field)] = bson.M{"$gte": t.Value}
+			key := q.tmpKey()
+			tempKeys = append(tempKeys, key)
+			b[key] = fmt.Sprintf(`
+				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, '+inf')))
+				`, key, zKey(q.entityName, t.Field), t.Value)
 		case query.LowerThan:
 			b[getField(t.Field)] = bson.M{"$lt": t.Value}
 		case query.LowerOrEqual:
