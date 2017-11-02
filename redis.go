@@ -199,6 +199,10 @@ func sKey(entity, key string, value interface{}) string {
 	return fmt.Sprintf("%s:%s:%s", entity, key, value)
 }
 
+func sKeyLastAll(entity, key string) string {
+	return fmt.Sprintf("%s:%s:*", entity, key)
+}
+
 func sIDsKey(entity string) string {
 	return fmt.Sprintf("%s:ids", entity)
 }

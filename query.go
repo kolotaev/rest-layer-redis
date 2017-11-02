@@ -64,24 +64,42 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 			}
 			b["$or"] = s
 		case query.In:
-			key := q.tmpKey()
-			auxKey1 := q.tmpKey()
-			tempKeys = append(tempKeys, key, auxKey1)
-			if len(t.Values) == 0 {
+			key1 := q.tmpKey()
+			key2 := q.tmpKey()
+			key3 := q.tmpKey()
+			var1 := q.tmpKey()
+			var2 := q.tmpKey()
+			tempKeys = append(tempKeys, key1, key2, key3)
+			var inKeys []string
 
-			}
 			if isNumeric(t.Values) {
-				ins := fmt.Sprintf("{" + strings.Repeat("%d", len(t.Values)) + "}", t.Values)
+				for _, v := range t.Values {
+					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
+				}
+				vals := fmt.Sprintf("{" + strings.Repeat("%d,", len(inKeys)) + "}", inKeys)
 				b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(%s))
-				redis.call('SI', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, %d)))
-				`, auxKey1, ins, key, zKey(q.entityName, t.Field), t.Value, t.Value)
+				local %[1]s = %[2]s
+				if next(%[1]s) ~= nil then
+					redis.call('SADD', '%[3]s', unpack(%[1]s))
+				end
+				redis.call('ZINTERSTORE', 2, '%[4]s', '%[3]s')
+				`, var1, vals, key, zKey(q.entityName, t.Field))
 			} else {
-				ins := fmt.Sprintf("{" + strings.Repeat("%d", len(t.Values)) + "}", t.Values)
-				b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(%s))
-				redis.call('SI', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, %d)))
-				`, auxKey1, ins, key, zKey(q.entityName, t.Field), t.Value, t.Value)
+				for _, v := range t.Values {
+					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
+				}
+				vals := fmt.Sprintf("{" + strings.Repeat("'%s',", len(inKeys)) + "}", inKeys)
+				b[key3] = fmt.Sprintf(`
+				local %[1]s = %[2]s
+				if next(%[1]s) != nil then
+					redis.call('SADD', '%[3]s', unpack(%[1]s))
+				end
+				local %[4]s = redis.call('KEYS', '%[5]s')
+				if next(%[1]s) != nil then
+					redis.call('SADD', '%[6]s', unpack(%[1]s))
+				end
+				redis.call('SINTERSTORE', '%[7]s', '%[3]s', '%[6]s')
+				`, var1, vals, key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
 			}
 		case query.NotIn:
 			return nil, resource.ErrNotImplemented
@@ -101,6 +119,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 			key := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			if isNumeric(t.Value) {
+				// todo: check if all keys are deleted?
 				b[key] = fmt.Sprintf(`
 				redis.call('ZUNIONSTORE', '%s', 1, '%s')
 				redis.call('ZREMRANGEBYSCORE', '%s', %d, %d)
