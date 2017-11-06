@@ -101,14 +101,56 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 					redis.call('SADD', '%[3]s', unpack(%[1]s))
 				end
 				local %[4]s = redis.call('KEYS', '%[5]s')
-				if next(%[1]s) != nil then
-					redis.call('SADD', '%[6]s', unpack(%[1]s))
+				if next(%[4]s) != nil then
+					redis.call('SADD', '%[6]s', unpack(%[4]s))
 				end
 				redis.call('SINTERSTORE', '%[7]s', '%[3]s', '%[6]s')
 				`, var1, vals, key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
 			}
 		case query.NotIn:
-			return nil, resource.ErrNotImplemented
+			key1 := q.tmpKey()
+			key2 := q.tmpKey()
+			key3 := q.tmpKey()
+			var1 := q.tmpKey()
+			var2 := q.tmpKey()
+			tempKeys = append(tempKeys, key1, key2, key3)
+			var inKeys []string
+
+			if isNumeric(t.Values) {
+				//for _, v := range t.Values {
+				//	inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
+				//}
+				//vals := fmt.Sprintf("{" + strings.Repeat("%d,", len(inKeys)) + "}", inKeys)
+				//b[key1] = fmt.Sprintf(`
+				//local %[1]s = %[2]s
+				//local %[3]s = redis.call('ZRANGE', '%[4]s', 0, -1, 'WITHSCORES')
+				//for x = %[3]s do
+				//	local ys = redis.call('ZRANGEBYSCORE', '%[4]s', x, x)
+				//	for y = ys do
+				//		table.insert(%[3]s, y)
+				//	end
+				//end
+				//if next(%[3]s) ~= nil then
+				//	redis.call('SADD', '%[5]s', unpack(%[3]s))
+				//end
+				//`, var1, vals, var2, zKey(q.entityName, t.Field), key1)
+			} else {
+				for _, v := range t.Values {
+					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
+				}
+				vals := fmt.Sprintf("{" + strings.Repeat("'%s',", len(inKeys)) + "}", inKeys)
+				b[key3] = fmt.Sprintf(`
+				local %[1]s = %[2]s
+				if next(%[1]s) != nil then
+					redis.call('SADD', '%[3]s', unpack(%[1]s))
+				end
+				local %[4]s = redis.call('KEYS', '%[5]s')
+				if next(%[1]s) != nil then
+					redis.call('SADD', '%[6]s', unpack(%[4]s))
+				end
+				redis.call('SDIFFSTORE', '%[7]s', '%[6]s', '%[3]s')
+				`, var1, vals, key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
+			}
 		case query.Equal:
 			key := q.tmpKey()
 			tempKeys = append(tempKeys, key)
