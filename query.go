@@ -79,17 +79,13 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				vals := fmt.Sprintf("{" + strings.Repeat("%d,", len(inKeys)) + "}", inKeys)
 				b[key1] = fmt.Sprintf(`
 				local %[1]s = %[2]s
-				local %[3]s = {}
 				for x = %[1]s do
-					local ys = redis.call('ZRANGEBYSCORE', '%[4]s', x, x)
-					for y = ys do
-						table.insert(%[3]s, y)
+					local ys = redis.call('ZRANGEBYSCORE', '%[3]s', x, x)
+					if next(ys) ~= nil then
+						redis.call('SADD', '%[4]s', unpack(ys))
 					end
 				end
-				if next(%[3]s) ~= nil then
-					redis.call('SADD', '%[5]s', unpack(%[3]s))
-				end
-				`, var1, vals, var2, zKey(q.entityName, t.Field), key1)
+				`, var1, vals, zKey(q.entityName, t.Field), key1)
 			} else {
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
