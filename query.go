@@ -1,12 +1,12 @@
 package rds
 
 import (
-	"github.com/rs/rest-layer/schema/query"
-	"github.com/rs/rest-layer/resource"
 	"time"
 	"math/rand"
 	"fmt"
-	"gopkg.in/mgo.v2/bson"
+
+	"github.com/rs/rest-layer/schema/query"
+	"github.com/rs/rest-layer/resource"
 )
 
 type Query struct {
@@ -43,25 +43,27 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 	for _, exp := range predicate {
 		switch t := exp.(type) {
 		case query.And:
-			s := []bson.M{}
-			for _, subExp := range t {
-				sb, err := q.translatePredicate(query.Predicate{subExp})
-				if err != nil {
-					return nil, err
-				}
-				s = append(s, sb)
-			}
-			b["$and"] = s
+			//var subs map[string]string
+			//for _, subExp := range t {
+			//	s, err := q.translatePredicate(query.Predicate{subExp})
+			//	if err != nil {
+			//		return nil, err
+			//	}
+			//	subs = append(subs, s)
+			//}
+			//key := q.tmpKey()
+			//tempKeys = append(tempKeys, key)
+			//b[key] =
 		case query.Or:
-			s := []bson.M{}
-			for _, subExp := range t {
-				sb, err := q.translatePredicate(query.Predicate{subExp})
-				if err != nil {
-					return nil, err
-				}
-				s = append(s, sb)
-			}
-			b["$or"] = s
+			//s := []bson.M{}
+			//for _, subExp := range t {
+			//	sb, err := q.translatePredicate(query.Predicate{subExp})
+			//	if err != nil {
+			//		return nil, err
+			//	}
+			//	s = append(s, sb)
+			//}
+			//b["$or"] = s
 		case query.In:
 			key1 := q.tmpKey()
 			key2 := q.tmpKey()
@@ -140,21 +142,28 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 			}
 		case query.Equal:
 			key := q.tmpKey()
+			var1 := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			if isNumeric(t.Value) {
 				b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, %d)))
-				`, key, zKey(q.entityName, t.Field), t.Value, t.Value)
+				local %[5]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, %[4]d)
+				if next(%[5]s) != nil then
+					redis.call('SADD', '%[1]s', unpack(%[5]s))
+				end
+				`, key, zKey(q.entityName, t.Field), t.Value, t.Value, var1)
 			} else {
 				b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(redis.call("SMEMBERS", '%s')))
-				`, key, sKey(q.entityName, t.Field, t.Value))
+				local %[3]s = redis.call('SMEMBERS', '%[2]s')
+				if next(%[3]s) != nil then
+					redis.call('SADD', '%[1]s', unpack(%[3]s))
+				end
+				`, key, sKey(q.entityName, t.Field, t.Value), var1)
 			}
 		case query.NotEqual:
 			key := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			if isNumeric(t.Value) {
-				// todo: check if all keys are deleted?
+				// TODO: check if all keys are deleted?
 				b[key] = fmt.Sprintf(`
 				redis.call('ZUNIONSTORE', '%s', 1, '%s')
 				redis.call('ZREMRANGEBYSCORE', '%s', %d, %d)
@@ -166,35 +175,44 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 			}
 		case query.GreaterThan:
 			key := q.tmpKey()
+			var1 := q.tmpKey()
 			tempKeys = append(tempKeys, key)
-			// todo: if zrange returns nil elements? the same for above
-			// eval "redis.call('SADD', 'zset2-out-nil', unpack(redis.call('ZRANGEBYSCORE', 'zset2', 2000, '+inf')))" 0 0
-			// ERR Error running script (call to f_9512e9c187ff6b9cfea6ac955a5dbc07eb6b964a):
-			// @user_script:1: @user_script: 1: Wrong number of args calling Redis command From Lua script
 			b[key] = fmt.Sprintf(`
-				if (string.len(x) >= 1) then
-					...
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]s', '+inf')
+				if next(%[4]s) != nil then
+					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
-				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '(%d', '+inf')))
-				`, key, zKey(q.entityName, t.Field), t.Value)
+				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		case query.GreaterOrEqual:
 			key := q.tmpKey()
+			var1 := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', %d, '+inf')))
-				`, key, zKey(q.entityName, t.Field), t.Value)
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, '+inf')
+				if next(%[4]s) != nil then
+					redis.call('SADD', '%[1]s', unpack(%[4]s))
+				end
+				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		case query.LowerThan:
 			key := q.tmpKey()
+			var1 := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '-inf', '(%d')))
-				`, key, zKey(q.entityName, t.Field), t.Value)
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]s')
+				if next(%[4]s) != nil then
+					redis.call('SADD', '%[1]s', unpack(%[4]s))
+				end
+				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		case query.LowerOrEqual:
 			key := q.tmpKey()
+			var1 := q.tmpKey()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
-				redis.call('SADD', '%s', unpack(redis.call('ZRANGEBYSCORE', '%s', '-inf', %d)))
-				`, key, zKey(q.entityName, t.Field), t.Value)
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', %[3]d)
+				if next(%[4]s) != nil then
+					redis.call('SADD', '%[1]s', unpack(%[4]s))
+				end
+				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		default:
 			return nil, resource.ErrNotImplemented
 		}
