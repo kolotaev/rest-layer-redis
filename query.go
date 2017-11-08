@@ -235,6 +235,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 	return "", "", tempKeys, nil
 }
 
-func getQuery(q *query.Query) (string, error) {
-	return translatePredicate(normalizePredicate(q.Predicate))
+func (q *Query) getQuery(qu *query.Query) (string, error) {
+	lastKey, qry, tempKeys, err := q.translatePredicate(normalizePredicate(qu.Predicate))
+	qry += fmt.Sprintf("\nredis.call('DEL', unpack(%s))", makeLuaTable(tempKeys))
+	return query, err
 }
