@@ -2,7 +2,6 @@ package rds
 
 import (
 	"time"
-	"math/rand"
 	"fmt"
 
 	"github.com/rs/rest-layer/schema/query"
@@ -32,10 +31,6 @@ func getField(f string) string {
 	return f
 }
 
-func (q *Query) tmpKey() string {
-	return fmt.Sprintf("tmp.%s.%d.%d.%d", q.entityName, getGoRoutineID(), rand.Int(), time.Now().UnixNano())
-}
-
 func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interface{}, error) {
 	var tempKeys []string
 	var b map[string]interface{}
@@ -51,7 +46,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 			//	}
 			//	subs = append(subs, s)
 			//}
-			//key := q.tmpKey()
+			//key := tmpVar()
 			//tempKeys = append(tempKeys, key)
 			//b[key] =
 		case query.Or:
@@ -65,11 +60,11 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 			//}
 			//b["$or"] = s
 		case query.In:
-			key1 := q.tmpKey()
-			key2 := q.tmpKey()
-			key3 := q.tmpKey()
-			var1 := q.tmpKey()
-			var2 := q.tmpKey()
+			key1 := tmpVar()
+			key2 := tmpVar()
+			key3 := tmpVar()
+			var1 := tmpVar()
+			var2 := tmpVar()
 			tempKeys = append(tempKeys, key1, key2, key3)
 			var inKeys []interface{}
 
@@ -103,11 +98,11 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				`, var1, makeLuaTable(inKeys), key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
 			}
 		case query.NotIn:
-			key1 := q.tmpKey()
-			key2 := q.tmpKey()
-			key3 := q.tmpKey()
-			var1 := q.tmpKey()
-			var2 := q.tmpKey()
+			key1 := tmpVar()
+			key2 := tmpVar()
+			key3 := tmpVar()
+			var1 := tmpVar()
+			var2 := tmpVar()
 			tempKeys = append(tempKeys, key1, key2, key3)
 			var inKeys []interface{}
 
@@ -141,8 +136,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				`, var1, makeLuaTable(inKeys), key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
 			}
 		case query.Equal:
-			key := q.tmpKey()
-			var1 := q.tmpKey()
+			key := tmpVar()
+			var1 := tmpVar()
 			tempKeys = append(tempKeys, key)
 			if isNumeric(t.Value) {
 				b[key] = fmt.Sprintf(`
@@ -160,7 +155,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				`, key, sKey(q.entityName, t.Field, t.Value), var1)
 			}
 		case query.NotEqual:
-			key := q.tmpKey()
+			key := tmpVar()
 			tempKeys = append(tempKeys, key)
 			if isNumeric(t.Value) {
 				// TODO: check if all keys are deleted?
@@ -174,8 +169,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				`, key, sIDsKey(q.entityName), sKey(q.entityName, t.Field, t.Value))
 			}
 		case query.GreaterThan:
-			key := q.tmpKey()
-			var1 := q.tmpKey()
+			key := tmpVar()
+			var1 := tmpVar()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]s', '+inf')
@@ -184,8 +179,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				end
 				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		case query.GreaterOrEqual:
-			key := q.tmpKey()
-			var1 := q.tmpKey()
+			key := tmpVar()
+			var1 := tmpVar()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, '+inf')
@@ -194,8 +189,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				end
 				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		case query.LowerThan:
-			key := q.tmpKey()
-			var1 := q.tmpKey()
+			key := tmpVar()
+			var1 := tmpVar()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]s')
@@ -204,8 +199,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (map[string]interf
 				end
 				`, key, zKey(q.entityName, t.Field), t.Value, var1)
 		case query.LowerOrEqual:
-			key := q.tmpKey()
-			var1 := q.tmpKey()
+			key := tmpVar()
+			var1 := tmpVar()
 			tempKeys = append(tempKeys, key)
 			b[key] = fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', %[3]d)

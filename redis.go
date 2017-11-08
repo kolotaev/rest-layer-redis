@@ -191,22 +191,6 @@ func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
 }
 
-func zKey(entity, key string) string {
-	return fmt.Sprintf("%s:%s", entity, key)
-}
-
-func sKey(entity, key string, value interface{}) string {
-	return fmt.Sprintf("%s:%s:%s", entity, key, value)
-}
-
-func sKeyLastAll(entity, key string) string {
-	return fmt.Sprintf("%s:%s:*", entity, key)
-}
-
-func sIDsKey(entity string) string {
-	return fmt.Sprintf("%s:ids", entity)
-}
-
 // handleWithContext makes requests to Redis aware of context.
 // Additionally it checks if we already have context error before proceeding further.
 // Rationale: redis-go actually doesn't support context abortion on its operations, though it has WithContext() client.

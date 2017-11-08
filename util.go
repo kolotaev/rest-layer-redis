@@ -1,25 +1,12 @@
 package rds
 
 import (
-	"bytes"
-	"runtime"
-	"strconv"
 	"sort"
 	"fmt"
 	"strings"
+	"time"
+	"math/rand"
 )
-
-// Obtain go-routine ID.
-// It's not the best practice to use goroutine's id but in our case it's justifiable.
-// ToDo: is it performant and reliable?
-func getGoRoutineID() uint64 {
-	b := make([]byte, 64)
-	b = b[:runtime.Stack(b, false)]
-	b = bytes.TrimPrefix(b, []byte("goroutine "))
-	b = b[:bytes.IndexByte(b, ' ')]
-	n, _ := strconv.ParseUint(string(b), 10, 64)
-	return n
-}
 
 // makePairs creates consequent combinations of sorted input elements.
 // Is used for creating range tuples for Lua.
@@ -41,7 +28,28 @@ func getRangePairs(in []interface{}) []interface{} {
 	return out
 }
 
-// Creates a lua table.
+// Get a Lua table definition based on given values.
 func makeLuaTable(a []interface{}) string {
 	return fmt.Sprintf("{" + strings.Repeat("'%s',", len(a)) + "}", a)
+}
+
+// Generate random string suited for temporary Lua variable and Redis key
+func tmpVar() string {
+	return fmt.Sprintf("tmp_%d_%d", rand.Int(), time.Now().UnixNano())
+}
+
+func zKey(entity, key string) string {
+	return fmt.Sprintf("%s:%s", entity, key)
+}
+
+func sKey(entity, key string, value interface{}) string {
+	return fmt.Sprintf("%s:%s:%s", entity, key, value)
+}
+
+func sKeyLastAll(entity, key string) string {
+	return fmt.Sprintf("%s:%s:*", entity, key)
+}
+
+func sIDsKey(entity string) string {
+	return fmt.Sprintf("%s:ids", entity)
 }
