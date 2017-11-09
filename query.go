@@ -43,6 +43,11 @@ func normalizePredicate(predicate query.Predicate) query.Predicate {
 
 func (q *Query) translatePredicate(predicate query.Predicate) (string, string, []string, error) {
 	var tempKeys []string
+	newKey := func() string {
+		k := tmpVar()
+		tempKeys = append(tempKeys, k)
+		return k
+	}
 
 	for _, exp := range predicate {
 		switch t := exp.(type) {
@@ -58,8 +63,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 				subs = append(subs, res)
 			}
 			if len(keys) > 1 {
-				key = tmpVar()
-				tempKeys = append(tempKeys, key)
+				key = newKey()
 				andClause := fmt.Sprintf(
 					"redis.call('ZUNIONSTORE', '%[1]s', unpack(%[2]s))",
 					key, makeLuaTableFromStrings(keys))
@@ -81,12 +85,11 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 			//}
 			//b["$or"] = s
 		case query.In:
-			key1 := tmpVar()
-			key2 := tmpVar()
-			key3 := tmpVar()
+			key1 := newKey()
+			key2 := newKey()
+			key3 := newKey()
 			var1 := tmpVar()
 			var2 := tmpVar()
-			tempKeys = append(tempKeys, key1, key2, key3)
 
 			if isNumeric(t.Values) {
 				result := fmt.Sprintf(`
@@ -119,12 +122,9 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 				return key3, result, tempKeys, nil
 			}
 		case query.NotIn:
-			key1 := tmpVar()
-			key2 := tmpVar()
-			key3 := tmpVar()
-			var1 := tmpVar()
-			var2 := tmpVar()
-			tempKeys = append(tempKeys, key1, key2, key3)
+			key1 := newKey()
+			key2 := newKey()
+			key3 := newKey()
 
 			if isNumeric(t.Values) {
 				result := fmt.Sprintf(`
@@ -138,6 +138,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 				return key1, result, tempKeys, nil
 			} else {
 				var inKeys []string
+				var1 := tmpVar()
+				var2 := tmpVar()
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
 				}
@@ -156,31 +158,27 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 			}
 		case query.Equal:
 			var result string
-			key := tmpVar()
-			var1 := tmpVar()
-			tempKeys = append(tempKeys, key)
+			key := newKey()
 			if isNumeric(t.Value) {
 				result = fmt.Sprintf(`
 				local %[5]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, %[4]d)
 				if next(%[5]s) != nil then
 					redis.call('SADD', '%[1]s', unpack(%[5]s))
 				end
-				`, key, zKey(q.entityName, t.Field), t.Value, t.Value, var1)
+				`, key, zKey(q.entityName, t.Field), t.Value, t.Value, tmpVar())
 			} else {
 				result = fmt.Sprintf(`
 				local %[3]s = redis.call('SMEMBERS', '%[2]s')
 				if next(%[3]s) != nil then
 					redis.call('SADD', '%[1]s', unpack(%[3]s))
 				end
-				`, key, sKey(q.entityName, t.Field, t.Value), var1)
+				`, key, sKey(q.entityName, t.Field, t.Value), tmpVar())
 			}
 			return key, result, tempKeys, nil
 		case query.NotEqual:
 			var result string
-			key := tmpVar()
-			tempKeys = append(tempKeys, key)
+			key := newKey()
 			if isNumeric(t.Value) {
-				// TODO: check if all keys are deleted?
 				result = fmt.Sprintf(`
 				redis.call('ZUNIONSTORE', '%s', 1, '%s')
 				redis.call('ZREMRANGEBYSCORE', '%s', %d, %d)
@@ -192,48 +190,41 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 			}
 			return key, result, tempKeys, nil
 		case query.GreaterThan:
-			key := tmpVar()
-			var1 := tmpVar()
-			tempKeys = append(tempKeys, key)
+			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]s', '+inf')
 				if next(%[4]s) != nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
-				`, key, zKey(q.entityName, t.Field), t.Value, var1)
+				`, key, zKey(q.entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
 		case query.GreaterOrEqual:
-			key := tmpVar()
-			var1 := tmpVar()
-			tempKeys = append(tempKeys, key)
+			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, '+inf')
 				if next(%[4]s) != nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
-				`, key, zKey(q.entityName, t.Field), t.Value, var1)
+				`, key, zKey(q.entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
 		case query.LowerThan:
-			key := tmpVar()
-			var1 := tmpVar()
-			tempKeys = append(tempKeys, key)
+			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]s')
 				if next(%[4]s) != nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
-				`, key, zKey(q.entityName, t.Field), t.Value, var1)
+				`, key, zKey(q.entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
 		case query.LowerOrEqual:
-			key := tmpVar()
-			var1 := tmpVar()
+			key := newKey()
 			tempKeys = append(tempKeys, key)
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', %[3]d)
 				if next(%[4]s) != nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
-				`, key, zKey(q.entityName, t.Field), t.Value, var1)
+				`, key, zKey(q.entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
 		default:
 			return "", "", nil, resource.ErrNotImplemented
