@@ -3,6 +3,7 @@ package rds
 import (
 	"time"
 	"fmt"
+	"strings"
 
 	"github.com/rs/rest-layer/schema/query"
 	"github.com/rs/rest-layer/resource"
@@ -13,7 +14,7 @@ type Query struct {
 }
 
 // Determine if value is numeric.
-// Numerics are all ints, floats, time values.
+// Numeric values are all ints, floats, time values.
 func isNumeric(v ...query.Value) bool {
 	switch v[0].(type) {
 	case int, float64, time.Time:
@@ -46,17 +47,29 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 	for _, exp := range predicate {
 		switch t := exp.(type) {
 		case query.And:
-			//var subs map[string]string
-			//for _, subExp := range t {
-			//	s, err := q.translatePredicate(query.Predicate{subExp})
-			//	if err != nil {
-			//		return nil, err
-			//	}
-			//	subs = append(subs, s)
-			//}
-			//key := tmpVar()
-			//tempKeys = append(tempKeys, key)
-			//b[key] =
+			var subs, keys []string
+			var key string
+			for _, subExp := range t {
+				k, res, _, err := q.translatePredicate(query.Predicate{subExp})
+				if err != nil {
+					return "", "", nil, err
+				}
+				keys = append(keys, k)
+				subs = append(subs, res)
+			}
+			if len(keys) > 1 {
+				key = tmpVar()
+				tempKeys = append(tempKeys, key)
+				andClause := fmt.Sprintf(
+					"redis.call('ZUNIONSTORE', '%[1]s', unpack(%[2]s))",
+					key, makeLuaTableFromStrings(keys))
+				subs = append(subs, andClause)
+			} else {
+				// Nothing to union here - we have only one Set(ZSet)
+				key = keys[len(keys)-1]
+			}
+			return key, strings.Join(subs, "\n"), tempKeys, nil
+
 		case query.Or:
 			//s := []bson.M{}
 			//for _, subExp := range t {
@@ -91,6 +104,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
 				}
+				// todo: ew don't need local local %[1]s = %[2]s - just inline!
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				if next(%[1]s) != nil then
