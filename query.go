@@ -74,12 +74,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 			var1 := tmpVar()
 			var2 := tmpVar()
 			tempKeys = append(tempKeys, key1, key2, key3)
-			var inKeys []interface{}
 
 			if isNumeric(t.Values) {
-				for _, v := range t.Values {
-					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
-				}
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				for x = %[1]s do
@@ -88,9 +84,10 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 						redis.call('SADD', '%[4]s', unpack(ys))
 					end
 				end
-				`, var1, makeLuaTable(inKeys), zKey(q.entityName, t.Field), key1)
+				`, var1, makeLuaTableFromValues(t.Values), zKey(q.entityName, t.Field), key1)
 				return key1, result, tempKeys, nil
 			} else {
+				var inKeys []string
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
 				}
@@ -104,7 +101,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 					redis.call('SADD', '%[6]s', unpack(%[4]s))
 				end
 				redis.call('SINTERSTORE', '%[7]s', '%[3]s', '%[6]s')
-				`, var1, makeLuaTable(inKeys), key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
+				`, var1, makeLuaTableFromStrings(inKeys), key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
 				return key3, result, tempKeys, nil
 			}
 		case query.NotIn:
@@ -114,13 +111,8 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 			var1 := tmpVar()
 			var2 := tmpVar()
 			tempKeys = append(tempKeys, key1, key2, key3)
-			var inKeys []interface{}
 
 			if isNumeric(t.Values) {
-				for _, v := range t.Values {
-					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
-				}
-				tuples := getRangePairs(inKeys)
 				result := fmt.Sprintf(`
 				for x = %[1]s do
 					local ys = redis.call('ZRANGEBYSCORE', '%[2]s', '(' .. x[1], '(' .. x[2])
@@ -128,9 +120,10 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 						redis.call('SADD', '%[3]s', unpack(ys))
 					end
 				end
-				`, makeLuaTable(tuples), zKey(q.entityName, t.Field), key1)
+				`, makeLuaTableFromStrings(getRangePairs(t.Values)), zKey(q.entityName, t.Field), key1)
 				return key1, result, tempKeys, nil
 			} else {
+				var inKeys []string
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(q.entityName, t.Field, v))
 				}
@@ -144,7 +137,7 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 					redis.call('SADD', '%[6]s', unpack(%[4]s))
 				end
 				redis.call('SDIFFSTORE', '%[7]s', '%[6]s', '%[3]s')
-				`, var1, makeLuaTable(inKeys), key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
+				`, var1, makeLuaTableFromStrings(inKeys), key1, var2, sKeyLastAll(q.entityName, t.Field), key2, key3)
 				return key3, result, tempKeys, nil
 			}
 		case query.Equal:
@@ -237,6 +230,6 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 
 func (q *Query) getQuery(qu *query.Query) (string, error) {
 	lastKey, qry, tempKeys, err := q.translatePredicate(normalizePredicate(qu.Predicate))
-	qry += fmt.Sprintf("\nredis.call('DEL', unpack(%s))", makeLuaTable(tempKeys))
+	qry += fmt.Sprintf("\nredis.call('DEL', unpack(%s))", makeLuaTableFromStrings(tempKeys))
 	return query, err
 }

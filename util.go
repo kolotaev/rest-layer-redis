@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 	"math/rand"
+	"github.com/rs/rest-layer/schema/query"
 )
 
 // makePairs creates consequent combinations of sorted input elements.
 // Is used for creating range tuples for Lua.
 // Ex: [a, c, d, b, e] -> ["{-inf,a}", "{a,b}", "{c,d}", ... "{e,+inf}"]
-func getRangePairs(in []interface{}) []interface{} {
+func getRangePairs(in []query.Value) []string {
 	var strIn []string
 	for _, i := range in {
 		strIn = append(strIn, string(i))
@@ -20,7 +21,7 @@ func getRangePairs(in []interface{}) []interface{} {
 	strIn = append(strIn, "+inf")
 	strIn = append([]string{"-inf"}, strIn...)
 
-	var out []interface{}
+	var out []string
 	for i := 1; i < len(strIn); i++ {
 		var tuple = fmt.Sprintf("{'%s','%s'},", strIn[i-1], strIn[i])
 		out = append(out, tuple)
@@ -29,8 +30,13 @@ func getRangePairs(in []interface{}) []interface{} {
 }
 
 // Get a Lua table definition based on given values.
-func makeLuaTable(a []interface{}) string {
+func makeLuaTableFromStrings(a []string) string {
 	return fmt.Sprintf("{" + strings.Repeat("'%s',", len(a)) + "}", a)
+}
+
+// Get a Lua table definition based on given values.
+func makeLuaTableFromValues(a []query.Value) string {
+	return fmt.Sprintf("{" + strings.Repeat("'%v',", len(a)) + "}", a)
 }
 
 // Generate random string suited for temporary Lua variable and Redis key
