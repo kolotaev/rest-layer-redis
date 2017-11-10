@@ -65,25 +65,36 @@ func (q *Query) translatePredicate(predicate query.Predicate) (string, string, [
 			if len(keys) > 1 {
 				key = newKey()
 				andClause := fmt.Sprintf(
-					"redis.call('ZUNIONSTORE', '%[1]s', unpack(%[2]s))",
+					"redis.call('ZINTERSTORE', '%[1]s', unpack(%[2]s))",
 					key, makeLuaTableFromStrings(keys))
 				subs = append(subs, andClause)
+			} else {
+				// Nothing to intersect here - we have only one Set(ZSet)
+				key = keys[len(keys)-1]
+			}
+			return key, strings.Join(subs, "\n"), tempKeys, nil
+		case query.Or:
+			var subs, keys []string
+			var key string
+			for _, subExp := range t {
+				k, res, _, err := q.translatePredicate(query.Predicate{subExp})
+				if err != nil {
+					return "", "", nil, err
+				}
+				keys = append(keys, k)
+				subs = append(subs, res)
+			}
+			if len(keys) > 1 {
+				key = newKey()
+				orClause := fmt.Sprintf(
+					"redis.call('ZUNIONSTORE', '%[1]s', unpack(%[2]s))",
+					key, makeLuaTableFromStrings(keys))
+				subs = append(subs, orClause)
 			} else {
 				// Nothing to union here - we have only one Set(ZSet)
 				key = keys[len(keys)-1]
 			}
 			return key, strings.Join(subs, "\n"), tempKeys, nil
-
-		case query.Or:
-			//s := []bson.M{}
-			//for _, subExp := range t {
-			//	sb, err := q.translatePredicate(query.Predicate{subExp})
-			//	if err != nil {
-			//		return nil, err
-			//	}
-			//	s = append(s, sb)
-			//}
-			//b["$or"] = s
 		case query.In:
 			key1 := newKey()
 			key2 := newKey()
