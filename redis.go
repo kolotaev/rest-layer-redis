@@ -67,8 +67,11 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		}
 		// Add secondary indices for filterable fields
 		for _, item := range items {
-			for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
-				pipe.SAdd(redisKey, h.redisItemKey(item))
+			for _, k := range h.getIndexSetKeys(item) {
+				pipe.SAdd(k, h.redisItemKey(item))
+			}
+			for k, v := range h.getIndexZSetKeys(item) {
+				pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
 			}
 		}
 		_, err = pipe.Exec()
@@ -96,8 +99,19 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		pipe := h.client.Pipeline()
 		pipe.HMSet(key, value)
 		// Todo: delete an old key from set!
-		for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
-			pipe.SAdd(redisKey, h.redisItemKey(item))
+		//for _, k := range h.getIndexSetKeys(original) {
+		//	pipe.SRem(k, h.redisItemKey(original))
+		//}
+		//for k := range h.getIndexZSetKeys(original) {
+		//	pipe.ZRem(k, h.redisItemKey(original))
+		//}
+
+		// Add new values to a secondary index.
+		for _, k := range h.getIndexSetKeys(item) {
+			pipe.SAdd(k, h.redisItemKey(item))
+		}
+		for k, v := range h.getIndexZSetKeys(item) {
+			pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
 		}
 		_, err = pipe.Exec()
 		return err
@@ -122,9 +136,14 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 
 		pipe := h.client.Pipeline()
 		pipe.HDel(h.redisItemKey(item))
-		for _, redisKey := range h.newRedisSecondaryIndexItems(item) {
-			pipe.SRem(redisKey)
-		}
+
+		// Delete secondary indices.
+		//for _, k := range h.getIndexSetKeys(item) {
+		//	pipe.SRem(k, h.redisItemKey(item))
+		//}
+		//for k := range h.getIndexZSetKeys(item) {
+		//	pipe.ZRem(k, h.redisItemKey(item))
+		//}
 		_, err = pipe.Exec()
 		return err
 	})
@@ -173,16 +192,29 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	return h.redisItemKey(i), value
 }
 
-// newRedisSecondaryIndexItem creates a secondary index for a resource's filterable fields,
+// getIndexZSetKeys creates a secondary index keys for a resource's filterable fields suited for ZSET.
 // Is used so that we can find them when needed.
-func (h *Handler) newRedisSecondaryIndexItems(i *resource.Item) []string {
-	var result []string
+// Ex: for users item returns {"users:age": 56, "users:salary": 8000}
+func (h *Handler) getIndexZSetKeys(i *resource.Item) map[string]float64 {
+	result := make(map[string]float64)
 	for _, field := range h.filterable {
-		if value, ok := i.Payload[field]; ok {
-			result = append(result, fmt.Sprintf("%s:%s:%s", h.entityName, field, value))
+		if value, ok := i.Payload[field]; ok && isNumeric(value) {
+			result[zKey(h.entityName, field)] = value.(float64)
 		}
 	}
+	return result
+}
 
+// getIndexSetKeys creates a secondary index keys for a resource's filterable fields suited for SET.
+// Is used so that we can find them when needed.
+// Ex: for users item returns ["users:hair:brown", "users:city:NYC"]
+func (h *Handler) getIndexSetKeys(i *resource.Item) []string {
+	var result []string
+	for _, field := range h.filterable {
+		if value, ok := i.Payload[field]; ok && !isNumeric(value) {
+			result = append(result, sKey(h.entityName, field, value))
+		}
+	}
 	return result
 }
 
