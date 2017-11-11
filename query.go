@@ -1,7 +1,6 @@
 package rds
 
 import (
-	"time"
 	"fmt"
 	"strings"
 
@@ -13,17 +12,6 @@ type Query struct {
 	entityName string
 }
 
-// Determine if value is numeric.
-// Numeric values are all ints, floats, time values.
-func isNumeric(v ...query.Value) bool {
-	switch v[0].(type) {
-	case int, float64, time.Time:
-		return true
-	default:
-		return false
-	}
-}
-
 // getField translates a schema field into a Redis field:
 func getField(f string) string {
 	if f == "id" {
@@ -33,7 +21,7 @@ func getField(f string) string {
 }
 
 
-// Turns implicit AND of a list of params into an explicit AND-predicate
+// normalizePredicate turns implicit AND on list of params of rest-layer query into an explicit AND-predicate
 func normalizePredicate(predicate query.Predicate) query.Predicate {
 	if len(predicate) > 1 {
 		return query.Predicate{query.And{predicate}}
@@ -41,6 +29,7 @@ func normalizePredicate(predicate query.Predicate) query.Predicate {
 	return predicate
 }
 
+// translatePredicate interprets rest-layer query to a Lua query script to be fed to Redis.
 func (q *Query) translatePredicate(predicate query.Predicate) (string, string, []string, error) {
 	var tempKeys []string
 	newKey := func() string {

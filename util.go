@@ -9,13 +9,24 @@ import (
 	"github.com/rs/rest-layer/schema/query"
 )
 
+// Determine if value is numeric.
+// Numeric values are all ints, floats, time values.
+func isNumeric(v ...query.Value) bool {
+	switch v[0].(type) {
+	case int, float64, time.Time:
+		return true
+	default:
+		return false
+	}
+}
+
 // makePairs creates consequent combinations of sorted input elements.
 // Is used for creating range tuples for Lua.
 // Ex: [a, c, d, b, e] -> ["{-inf,a}", "{a,b}", "{c,d}", ... "{e,+inf}"]
 func getRangePairs(in []query.Value) []string {
 	var strIn []string
 	for _, i := range in {
-		strIn = append(strIn, string(i))
+		strIn = append(strIn, fmt.Sprintf("%v", i))
 	}
 	sort.Strings(strIn)
 	strIn = append(strIn, "+inf")
@@ -44,18 +55,26 @@ func tmpVar() string {
 	return fmt.Sprintf("tmp_%d_%d", rand.Int(), time.Now().UnixNano())
 }
 
-func zKey(entity, key string) string {
-	return fmt.Sprintf("%s:%s", entity, key)
-}
-
+// Get key name for a Redis set.
+// Ex: users:hair-color:brown
 func sKey(entity, key string, value interface{}) string {
 	return fmt.Sprintf("%s:%s:%s", entity, key, value)
 }
 
+// Get key name for a Redis sorted set.
+// Ex: users:age
+func zKey(entity, key string) string {
+	return fmt.Sprintf("%s:%s", entity, key)
+}
+
+// Get a search pattern for the last element of a compound key (for Redis set).
+// Ex: users:hair-color:* -> get all stored ages of users.
 func sKeyLastAll(entity, key string) string {
 	return fmt.Sprintf("%s:%s:*", entity, key)
 }
 
+// Get an IDs key name for set of all entity IDs.
+// Ex: users:ids
 func sIDsKey(entity string) string {
 	return fmt.Sprintf("%s:ids", entity)
 }

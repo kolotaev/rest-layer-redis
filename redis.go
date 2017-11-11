@@ -186,7 +186,7 @@ func (h *Handler) newRedisSecondaryIndexItems(i *resource.Item) []string {
 	return result
 }
 
-// redisItemKey creates a redis-compatible string key from and for the resource item.
+// redisItemKey creates a redis-compatible string key to denote a Hash key of an item.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
 }
