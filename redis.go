@@ -98,13 +98,14 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 
 		pipe := h.client.Pipeline()
 		pipe.HMSet(key, value)
-		// Todo: delete an old key from set!
-		//for _, k := range h.getIndexSetKeys(original) {
-		//	pipe.SRem(k, h.redisItemKey(original))
-		//}
-		//for k := range h.getIndexZSetKeys(original) {
-		//	pipe.ZRem(k, h.redisItemKey(original))
-		//}
+
+		// Delete old values from a secondary index.
+		for _, k := range h.getIndexSetKeys(original) {
+			pipe.SRem(k, h.redisItemKey(original))
+		}
+		for k := range h.getIndexZSetKeys(original) {
+			pipe.ZRem(k, h.redisItemKey(original))
+		}
 
 		// Add new values to a secondary index.
 		for _, k := range h.getIndexSetKeys(item) {
@@ -138,12 +139,12 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 		pipe.HDel(h.redisItemKey(item))
 
 		// Delete secondary indices.
-		//for _, k := range h.getIndexSetKeys(item) {
-		//	pipe.SRem(k, h.redisItemKey(item))
-		//}
-		//for k := range h.getIndexZSetKeys(item) {
-		//	pipe.ZRem(k, h.redisItemKey(item))
-		//}
+		for _, k := range h.getIndexSetKeys(item) {
+			pipe.SRem(k, h.redisItemKey(item))
+		}
+		for k := range h.getIndexZSetKeys(item) {
+			pipe.ZRem(k, h.redisItemKey(item))
+		}
 		_, err = pipe.Exec()
 		return err
 	})
