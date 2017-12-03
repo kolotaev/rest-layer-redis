@@ -58,7 +58,7 @@ func tmpVar() string {
 // Get key name for a Redis set.
 // Ex: users:hair-color:brown
 func sKey(entity, key string, value interface{}) string {
-	return fmt.Sprintf("%s:%s:%s", entity, key, value)
+	return fmt.Sprintf("%s:%s:%v", entity, key, value)
 }
 
 // Get key name for a Redis sorted set.
