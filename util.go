@@ -20,7 +20,7 @@ func isNumeric(v ...query.Value) bool {
 	}
 }
 
-// makePairs creates consequent combinations of sorted input elements.
+// getRangePairs creates consequent combinations of ASC-sorted input elements.
 // Is used for creating range tuples for Lua.
 // Ex: [a, c, d, b, e] -> ["{-inf,a}", "{a,b}", "{c,d}", ... "{e,+inf}"]
 func getRangePairs(in []query.Value) []string {

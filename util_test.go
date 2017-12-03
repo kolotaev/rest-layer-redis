@@ -2,10 +2,10 @@ package rds
 
 import (
 	"testing"
+	"fmt"
 
 	"github.com/rs/rest-layer/schema/query"
 	"github.com/stretchr/testify/assert"
-	"fmt"
 )
 
 func TestIsNumeric(t *testing.T)  {
@@ -55,11 +55,15 @@ func TestGetRangePairs(t *testing.T)  {
 		value []query.Value
 		want  []string
 	}{
-		{[]query.Value{"aa"}, []string{}},
+		{[]query.Value{}, []string{"{-inf,+inf}"}},
+		{[]query.Value{"s", "a", "r"}, []string{"{-inf,a}", "{a,s}", "{s,r}", "{r, +inf}"}},
+		{[]query.Value{"a", "s", "ё"}, []string{"{-inf,a}", "{a,s}", "{s,ё}", "{ё, +inf}"}},
+		{[]query.Value{8, 7, -9}, []string{"{-inf,-9}", "{-9,7}", "{7,8}", "{8, +inf}"}},
+		{[]query.Value{555}, []string{"{-inf,555}", "{555, +inf}"}},
 	}
 	for i := range cases {
 		tc := cases[i]
-		assert.Equal(t, tc.want, makeLuaTableFromStrings(tc.value), fmt.Sprintf("Test case #%d", i))
+		assert.Equal(t, tc.want, getRangePairs(tc.value), fmt.Sprintf("Test case #%d", i))
 	}
 }
 
