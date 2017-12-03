@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/rest-layer/schema/query"
 	"github.com/rs/rest-layer/resource"
+	"github.com/rs/rest-layer/schema/query"
 )
 
 type Query struct {
@@ -19,7 +19,6 @@ func getField(f string) string {
 	}
 	return f
 }
-
 
 // normalizePredicate turns implicit AND on list of params of rest-layer query into an explicit AND-predicate
 func normalizePredicate(predicate query.Predicate) query.Predicate {

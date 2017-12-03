@@ -1,14 +1,14 @@
 package rds
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 
 	"github.com/rs/rest-layer/schema/query"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIsNumeric(t *testing.T)  {
+func TestIsNumeric(t *testing.T) {
 	cases := []struct {
 		value query.Value
 		want  bool
@@ -34,7 +34,7 @@ func TestIsNumeric(t *testing.T)  {
 	}
 }
 
-func TestMakeLuaTableFromStrings(t *testing.T)  {
+func TestMakeLuaTableFromStrings(t *testing.T) {
 	cases := []struct {
 		value []string
 		want  string
@@ -50,7 +50,7 @@ func TestMakeLuaTableFromStrings(t *testing.T)  {
 	}
 }
 
-func TestGetRangePairs(t *testing.T)  {
+func TestGetRangePairs(t *testing.T) {
 	cases := []struct {
 		value []query.Value
 		want  []string
@@ -67,7 +67,7 @@ func TestGetRangePairs(t *testing.T)  {
 	}
 }
 
-func TestMakeLuaTableFromValues(t *testing.T)  {
+func TestMakeLuaTableFromValues(t *testing.T) {
 	cases := []struct {
 		value query.Value
 		want  string
@@ -86,7 +86,7 @@ func TestMakeLuaTableFromValues(t *testing.T)  {
 	}
 }
 
-func TestTmpVar(t *testing.T)  {
+func TestTmpVar(t *testing.T) {
 	v1 := tmpVar()
 	v2 := tmpVar()
 	v3 := tmpVar()
@@ -95,12 +95,12 @@ func TestTmpVar(t *testing.T)  {
 	assert.NotEqual(t, v2, v3)
 }
 
-func TestSKey(t *testing.T)  {
+func TestSKey(t *testing.T) {
 	cases := []struct {
 		entity string
-		key string
-		value interface{}
-		want  string
+		key    string
+		value  interface{}
+		want   string
 	}{
 		{"users", "1234", 78, "users:1234:78"},
 		{"users", "bob", "78", "users:bob:78"},
@@ -114,11 +114,11 @@ func TestSKey(t *testing.T)  {
 	}
 }
 
-func TestZKey(t *testing.T)  {
+func TestZKey(t *testing.T) {
 	cases := []struct {
 		entity string
-		key string
-		want  string
+		key    string
+		want   string
 	}{
 		{"users", "bob", "users:bob"},
 		{"users", "bob", "users:bob"},
@@ -131,11 +131,11 @@ func TestZKey(t *testing.T)  {
 	}
 }
 
-func TestSKeyLastAll(t *testing.T)  {
+func TestSKeyLastAll(t *testing.T) {
 	cases := []struct {
 		entity string
-		key string
-		want  string
+		key    string
+		want   string
 	}{
 		{"users", "bob", "users:bob:*"},
 		{"users", "bob", "users:bob:*"},
@@ -148,10 +148,10 @@ func TestSKeyLastAll(t *testing.T)  {
 	}
 }
 
-func TestSIDsKey(t *testing.T)  {
+func TestSIDsKey(t *testing.T) {
 	cases := []struct {
 		entity string
-		want  string
+		want   string
 	}{
 		{"users", "users:ids"},
 		{"users:students", "users:students:ids"},

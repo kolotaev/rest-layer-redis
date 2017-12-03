@@ -1,12 +1,12 @@
 package rds
 
 import (
-	"sort"
 	"fmt"
+	"github.com/rs/rest-layer/schema/query"
+	"math/rand"
+	"sort"
 	"strings"
 	"time"
-	"math/rand"
-	"github.com/rs/rest-layer/schema/query"
 )
 
 // Determine if value is numeric.
@@ -42,12 +42,12 @@ func getRangePairs(in []query.Value) []string {
 
 // Get a Lua table definition based on given values.
 func makeLuaTableFromStrings(a []string) string {
-	return fmt.Sprintf("{" + strings.Repeat("'%s',", len(a)) + "}", a)
+	return fmt.Sprintf("{"+strings.Repeat("'%s',", len(a))+"}", a)
 }
 
 // Get a Lua table definition based on given values.
 func makeLuaTableFromValues(a []query.Value) string {
-	return fmt.Sprintf("{" + strings.Repeat("'%v',", len(a)) + "}", a)
+	return fmt.Sprintf("{"+strings.Repeat("'%v',", len(a))+"}", a)
 }
 
 // Generate random string suited for temporary Lua variable and Redis key
