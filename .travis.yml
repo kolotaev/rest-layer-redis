@@ -1,0 +1,13 @@
+language: go
+
+services:
+  - redis-server
+
+go:
+  - 1.8.x
+  - 1.9.x
+  - tip
+
+matrix:
+  allow_failures:
+    - go: tip
