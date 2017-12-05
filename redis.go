@@ -14,31 +14,38 @@ import (
 type Handler struct {
 	client     *redis.Client
 	entityName string
-	sortable   []string
 	filterable []string
+	numeric []string
+	fieldNames 	[]string
 }
 
 // NewHandler creates a new redis handler
 func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
-	var sortable, filterable []string
+	var names, filterable, numeric []string
 
 	for k, v := range schema.Fields {
+		names = append(names, k)
+
 		// ID is always filterable - needed for queries.
 		if k == "id" {
 			filterable = append(filterable, k)
 		}
-		if v.Sortable {
-			sortable = append(sortable, k)
-		}
 		if v.Filterable {
 			filterable = append(filterable, k)
+		}
+
+		// Detect possible numeric-value fields
+		// We'll need the for SORT type determination.
+		switch v.Validator.(type) {
+		case schema.Integer, schema.Float:
+			numeric = append(numeric, k)
 		}
 	}
 	return &Handler{
 		client:     c,
 		entityName: entityName,
-		sortable:   sortable,
 		filterable: filterable,
+		fieldNames: names,
 	}
 }
 
@@ -163,18 +170,34 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 	//var result *resource.ItemList
 	//
 	//err := handleWithContext(ctx, func() error {
-	//	q, err := getLuaQuery()
+	//	luaQuery, err := getSelect(h.entityName, q)
 	//	if err != nil {
 	//		return err
 	//	}
-	//	qs := redis.NewScript(q)
+	//
+	//	limit, offset := -1, 0
+	//	if q.Window != nil {
+	//		if q.Window.Limit >= 0 {
+	//			limit = q.Window.Limit
+	//		}
+	//		if q.Window.Offset > 0 {
+	//			offset = q.Window.Offset
+	//		}
+	//	}
+	//
+	//  	luaQuery, err := getSortWithLimit(q, luaQuery, h.fieldNames, h.numeric, limit, offset)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	qs := redis.NewScript(luaQuery.Script)
 	//	err = qs.Run(h.client, []string{}, "value").Err()
 	//	if err != nil {
 	//		return err
 	//	}
 	//	res := qs.Exec();
 	//})
-	return nil, fmt.Errorf("j")
+	//return nil, fmt.Errorf("j")
 }
 
 // newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
