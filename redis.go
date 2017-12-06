@@ -161,7 +161,22 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 
 // Clear clears all items from Redis matching the query
 func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
-	return 0, fmt.Errorf("j")
+	//err := handleWithContext(ctx, func() error {
+	//	luaQuery := &LuaQuery{}
+	//	if err := luaQuery.addSelect(h.entityName, q); err != nil {
+	//		return err
+	//	}
+	//
+	//  	luaQuery.addDelete()
+	//
+	//	qs := redis.NewScript(luaQuery.Script)
+	//	err = qs.Run(h.client, []string{}, "value").Err()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	res := qs.Exec();
+	//})
+	//return -1, fmt.Errorf("j")
 }
 
 // Find items from Redis matching the provided query
@@ -170,8 +185,8 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 	//var result *resource.ItemList
 	//
 	//err := handleWithContext(ctx, func() error {
-	//	luaQuery, err := getSelect(h.entityName, q)
-	//	if err != nil {
+	//	luaQuery := &LuaQuery{}
+	//	if err := luaQuery.addSelect(h.entityName, q); err != nil {
 	//		return err
 	//	}
 	//
@@ -185,8 +200,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 	//		}
 	//	}
 	//
-	//  	luaQuery, err := getSortWithLimit(q, luaQuery, h.fieldNames, h.numeric, limit, offset)
-	//	if err != nil {
+	//	if err := luaQuery.addSortWithLimit(q, limit, offset, h.fieldNames, h.numeric); err != nil {
 	//		return err
 	//	}
 	//

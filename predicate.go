@@ -3,18 +3,10 @@ package rds
 import (
 	"fmt"
 	"strings"
-	"sort"
 
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema/query"
 )
-
-// LuaQuery represents a result of building Redis select query as a Lua script
-type LuaQuery struct {
-	Script string
-	LastKey string
-	AllKeys []string
-}
 
 // getField translates a schema field into a Redis field:
 func getField(f string) string {
@@ -237,59 +229,4 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 		}
 	}
 	return "", "", tempKeys, nil
-}
-
-func getSortWithLimit(q *query.Query, lq LuaQuery, fields, numeric []string, limit, offset int) (LuaQuery, error) {
-	// Redis supports only one sort field.
-	if len(q.Sort) > 1 {
-		// todo - ErrNotImplemented ???
-		return nil, resource.ErrNotImplemented
-	}
-
-	// Determine sort direction
-	var sortByField, direction string
-	sortByFieldRaw := q.Sort[0]
-	if strings.HasPrefix(sortByFieldRaw, "-") {
-		sortByField = sortByFieldRaw[1:len(sortByFieldRaw)-1]
-		direction = "DESC"
-	} else {
-		sortByField = sortByFieldRaw
-		direction = "ASC"
-	}
-
-	// First, we are sorting the set with all IDs
-	script := fmt.Sprintf("\n redis.call('SORT', '%s', 'BY'", lq.LastKey)
-
-	// Add sorter field
-	if sort.SearchStrings(numeric, sortByField) > 0 {
-		script += fmt.Sprintf(", '*->%s', '%s'", lq.LastKey, direction)
-	} else {
-		script += fmt.Sprintf(", '*->%s', 'ALPHA', '%s'", lq.LastKey, direction)
-	}
-
-	// Add all fields to a result of a sort
-	for _, v := range fields {
-		script += fmt.Sprintf(", 'GET', '*->%s'", v)
-	}
-
-	// Add limit and offset
-	script += fmt.Sprintf(", 'LIMIT', %d, %d)", offset, limit)
-
-	lq.Script += script
-	return lq, nil
-}
-
-func deleteTemporaryKeys(q LuaQuery) LuaQuery {
-	q.Script = q.Script + fmt.Sprintf("\nredis.call('DEL', unpack(%s))", makeLuaTableFromStrings(q.AllKeys))
-	return q
-}
-
-func getSelect(entityName string, q *query.Query) (LuaQuery, error) {
-	lastKey, script, tempKeys, err := translatePredicate(entityName, normalizePredicate(q.Predicate))
-	qry := &LuaQuery{
-		Script: script,
-		LastKey: lastKey,
-		AllKeys: tempKeys,
-	}
-	return qry, err
 }
