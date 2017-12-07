@@ -73,8 +73,19 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 }
 
 func (lq *LuaQuery) addDelete() {
+	// Get the count of records going to be deleted.
 	resultVar := tmpVar()
-	lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY'", resultVar, lq.LastKey)
+	lq.Script += fmt.Sprintf("\n local %s = redis.call('ZCOUNT', '%s', '-inf', '+ing'", resultVar, lq.LastKey)
+
+	// Delete all the entities we asked to delete.
+	lq.Script += fmt.Sprintf(`
+		local %[1]s = redis.call('ZRANGE', '%[2]s', 0, -1)
+		if next(%[1]s) != nil then
+			redis.call('DEL', unpack(%[1]s))
+		end
+		`, tmpVar(), lq.LastKey)
+
+	// todo - add secondary indices deletion
 
 	// Delete everything we've created previously
 	lq.deleteTemporaryKeys()
