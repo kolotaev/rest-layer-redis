@@ -161,22 +161,24 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 
 // Clear clears all items from Redis matching the query
 func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
-	//err := handleWithContext(ctx, func() error {
-	//	luaQuery := &LuaQuery{}
-	//	if err := luaQuery.addSelect(h.entityName, q); err != nil {
-	//		return err
-	//	}
-	//
-	//  	luaQuery.addDelete()
-	//
-	//	qs := redis.NewScript(luaQuery.Script)
-	//	err = qs.Run(h.client, []string{}, "value").Err()
-	//	if err != nil {
-	//		return err
-	//	}
-	//	res := qs.Exec();
-	//})
-	//return -1, fmt.Errorf("j")
+	res := -1
+	err := handleWithContext(ctx, func() error {
+		luaQuery := &LuaQuery{}
+		if err := luaQuery.addSelect(h.entityName, q); err != nil {
+			return err
+		}
+
+	  	luaQuery.addDelete()
+
+		var err error
+		qs := redis.NewScript(luaQuery.Script)
+		res, err = qs.Run(h.client, []string{}).Result()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return res, err
 }
 
 // Find items from Redis matching the provided query
