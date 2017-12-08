@@ -145,6 +145,7 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 		pipe := h.client.Pipeline()
 		pipe.HDel(h.redisItemKey(item))
 
+		// todo - is it atomic?
 		// Delete secondary indices.
 		for _, k := range h.getIndexSetKeys(item) {
 			pipe.SRem(k, h.redisItemKey(item))
@@ -161,9 +162,10 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 
 // Clear clears all items from Redis matching the query
 func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
-	res := -1
+	result := -1
 	err := handleWithContext(ctx, func() error {
 		luaQuery := &LuaQuery{}
+
 		if err := luaQuery.addSelect(h.entityName, q); err != nil {
 			return err
 		}
@@ -172,48 +174,58 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 
 		var err error
 		qs := redis.NewScript(luaQuery.Script)
-		res, err = qs.Run(h.client, []string{}).Result()
+		result, err = qs.Run(h.client, []string{}).Result()
 		if err != nil {
 			return err
 		}
 		return nil
 	})
-	return res, err
+	return result, err
 }
 
 // Find items from Redis matching the provided query
 func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
-	//result := &resource.ItemList{Total: -1, Offset: offset, Limit: limit, Items: []*resource.Item{}}
-	//var result *resource.ItemList
-	//
-	//err := handleWithContext(ctx, func() error {
-	//	luaQuery := &LuaQuery{}
-	//	if err := luaQuery.addSelect(h.entityName, q); err != nil {
-	//		return err
-	//	}
-	//
-	//	limit, offset := -1, 0
-	//	if q.Window != nil {
-	//		if q.Window.Limit >= 0 {
-	//			limit = q.Window.Limit
-	//		}
-	//		if q.Window.Offset > 0 {
-	//			offset = q.Window.Offset
-	//		}
-	//	}
-	//
-	//	if err := luaQuery.addSortWithLimit(q, limit, offset, h.fieldNames, h.numeric); err != nil {
-	//		return err
-	//	}
-	//
-	//	qs := redis.NewScript(luaQuery.Script)
-	//	err = qs.Run(h.client, []string{}, "value").Err()
-	//	if err != nil {
-	//		return err
-	//	}
-	//	res := qs.Exec();
-	//})
-	//return nil, fmt.Errorf("j")
+	var result *resource.ItemList
+
+	err := handleWithContext(ctx, func() error {
+		luaQuery := &LuaQuery{}
+		if err := luaQuery.addSelect(h.entityName, q); err != nil {
+			return err
+		}
+
+		limit, offset := -1, 0
+		if q.Window != nil {
+			if q.Window.Limit >= 0 {
+				limit = q.Window.Limit
+			}
+			if q.Window.Offset > 0 {
+				offset = q.Window.Offset
+			}
+		}
+
+		if err := luaQuery.addSortWithLimit(q, limit, offset, h.fieldNames, h.numeric); err != nil {
+			return err
+		}
+
+		qs := redis.NewScript(luaQuery.Script)
+		data, err := qs.Run(h.client, []string{}, "value").Result()
+		if err != nil {
+			return err
+		}
+
+		result = &resource.ItemList{
+			Total: -1,
+			Limit: limit,
+			Items: []*resource.Item{},
+		}
+
+		for _, v := range data {
+			result.Items = append(result.Items, h.newItem(v))
+		}
+
+		return nil
+	})
+	return result, err
 }
 
 // newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
@@ -230,6 +242,11 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	value["__updated__"] = i.Updated
 
 	return h.redisItemKey(i), value
+}
+
+// newItem converts a Redis item from DB into resource.Item
+func (h *Handler) newItem(i interface{}) *resource.Item {
+	return &resource.Item{}
 }
 
 // getIndexZSetKeys creates a secondary index keys for a resource's filterable fields suited for ZSET.
