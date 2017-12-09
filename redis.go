@@ -219,7 +219,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			Items: []*resource.Item{},
 		}
 
-		for _, v := range data {
+		for _, v := range data.([]interface{}) {
 			result.Items = append(result.Items, h.newItem(v))
 		}
 
