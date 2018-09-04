@@ -66,6 +66,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 			return resource.ErrConflict
 		}
 
+		// TODO: is pipeline atomic?
 		pipe := h.client.Pipeline()
 		// Add hash-records
 		for _, item := range items {
@@ -93,14 +94,9 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 	err := handleWithContext(ctx, func() error {
 		key, value := h.newRedisItem(item)
 
-		current, err := h.client.HMGet(key, "__etag__").Result()
-		// TODO: is it real not found???
-		if err != nil {
-			return resource.ErrNotFound
-		}
 		// TODO: original?
-		if current[0] != original.ETag {
-			return resource.ErrConflict
+		if err := h.checkPresenceAndEtag(key, original); err != nil {
+			return err
 		}
 
 		pipe := h.client.Pipeline()
@@ -121,7 +117,7 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		for k, v := range h.getIndexZSetKeys(item) {
 			pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
 		}
-		_, err = pipe.Exec()
+		_, err := pipe.Exec()
 		return err
 	})
 
@@ -133,13 +129,8 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 	err := handleWithContext(ctx, func() error {
 		key, _ := h.newRedisItem(item)
 
-		current, err := h.client.HMGet(key, "__etag__").Result()
-		// TODO: is it real not found???
-		if err != nil {
-			return resource.ErrNotFound
-		}
-		if current[0] != item.ETag {
-			return resource.ErrConflict
+		if err := h.checkPresenceAndEtag(key, item); err != nil {
+			return err
 		}
 
 		pipe := h.client.Pipeline()
@@ -153,18 +144,18 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 		for k := range h.getIndexZSetKeys(item) {
 			pipe.ZRem(k, h.redisItemKey(item))
 		}
-		_, err = pipe.Exec()
+		_, err := pipe.Exec()
 		return err
 	})
 
 	return err
 }
 
-// Clear clears all items from Redis matching the query
+// Clear purges all items from Redis matching the query
 func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 	result := -1
 	err := handleWithContext(ctx, func() error {
-		luaQuery := &LuaQuery{}
+		luaQuery := new(LuaQuery)
 
 		if err := luaQuery.addSelect(h.entityName, q); err != nil {
 			return err
@@ -275,9 +266,24 @@ func (h *Handler) getIndexSetKeys(i *resource.Item) []string {
 	return result
 }
 
-// redisItemKey creates a redis-compatible string key to denote a Hash key of an item.
+// redisItemKey creates a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
+}
+
+// checkPresenceAndEtag checks if record is stored in DB (by its ID) and its Etag is the same as Etag in provided item.
+// If no result found - no item is stored in the DB.
+// If found - we should compare etags.
+func (h *Handler) checkPresenceAndEtag(key string, item *resource.Item) error {
+	current, err := h.client.HGet(key, "__etag__").Result()
+	// TODO: is it a real not found???
+	if err != nil {
+		return resource.ErrNotFound
+	}
+	if current[0] != item.ETag {
+		return resource.ErrConflict
+	}
+	return nil
 }
 
 // handleWithContext makes requests to Redis aware of context.

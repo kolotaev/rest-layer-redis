@@ -9,6 +9,7 @@ import (
 )
 
 // getField translates a schema field into a Redis field:
+// TODO: do we need it?
 func getField(f string) string {
 	if f == "id" {
 		return "__id__"

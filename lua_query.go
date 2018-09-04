@@ -11,8 +11,12 @@ import (
 
 // LuaQuery represents a result of building Redis select query as a Lua script
 type LuaQuery struct {
+	// Script that will be executed on Redis Lua engine
 	Script string
+	// LastKey is the key where the ids against which the final query will be executed.
 	LastKey string
+	// AllKeys are temporary keys created in Redis during Query building process.
+	// They should be eventually deleted after query returned some result.
 	AllKeys []string
 }
 
@@ -21,7 +25,6 @@ func (lq *LuaQuery) addSelect(entityName string, q *query.Query) error {
 	lq.Script = script
 	lq.LastKey = lastKey
 	lq.AllKeys = tempKeys
-
 	return err
 }
 
@@ -73,13 +76,14 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 }
 
 func (lq *LuaQuery) addDelete() {
-	// Get the count of records going to be deleted.
+	// Get the count of records that are going to be deleted.
 	resultVar := tmpVar()
 	lq.Script += fmt.Sprintf("\n local %s = redis.call('ZCOUNT', '%s', '-inf', '+ing'", resultVar, lq.LastKey)
 
-	// Delete all the entities we asked to delete.
+	// Delete all the entities we were asked to delete.
 	lq.Script += fmt.Sprintf(`
 		local %[1]s = redis.call('ZRANGE', '%[2]s', 0, -1)
+		-- check that we have at least one item before arguments splice.
 		if next(%[1]s) != nil then
 			redis.call('DEL', unpack(%[1]s))
 		end
