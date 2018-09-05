@@ -3,6 +3,8 @@
 
 ## Usage
 
+Storage uses Redis scripting, available only since Redis version 2.6 or greater.
+
 ```go
 import (
     "github.com/go-redis/redis"

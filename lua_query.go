@@ -99,5 +99,7 @@ func (lq *LuaQuery) addDelete() {
 }
 
 func (lq *LuaQuery) deleteTemporaryKeys() {
-	lq.Script = lq.Script + fmt.Sprintf("\nredis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
+	if len(lq.AllKeys) > 0 {
+		lq.Script = lq.Script + fmt.Sprintf("\n redis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
+	}
 }

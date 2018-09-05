@@ -66,8 +66,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 			return resource.ErrConflict
 		}
 
-		// TODO: is pipeline atomic?
-		pipe := h.client.Pipeline()
+		pipe := h.client.TxPipeline()
 		// Add hash-records
 		for _, item := range items {
 			key, value := h.newRedisItem(item)
@@ -99,7 +98,7 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 			return err
 		}
 
-		pipe := h.client.Pipeline()
+		pipe := h.client.TxPipeline()
 		// TODO: HSet?
 		pipe.HMSet(key, value)
 
@@ -134,7 +133,7 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 			return err
 		}
 
-		pipe := h.client.Pipeline()
+		pipe := h.client.TxPipeline()
 		pipe.HDel(h.redisItemKey(item))
 
 		// todo - is it atomic?
@@ -205,15 +204,16 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			return err
 		}
 
-		result = &resource.ItemList{
-			Total: -1,
-			Limit: limit,
-			Items: []*resource.Item{},
+		items, err := h.itemsFromRedisResult(data)
+		if err != nil {
+			return err
 		}
 
-		// TODO: add items
-		for _, v := range data.([]interface{}) {
-			result.Items = append(result.Items, h.newItem(v))
+		// TODO - is len(items) correct?
+		result = &resource.ItemList{
+			Total: len(items),
+			Limit: limit,
+			Items: items,
 		}
 
 		return nil
@@ -240,6 +240,16 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 // newItem converts a Redis item from DB into resource.Item
 func (h *Handler) newItem(i interface{}) *resource.Item {
 	return &resource.Item{}
+}
+
+// itemsFromRedisResult converts data-set returned from Redis to a Rest-layer Item collection representation.
+func (h *Handler) itemsFromRedisResult(data interface{}) ([]*resource.Item, error) {
+	var items = []*resource.Item{}
+	// TODO: implement properly
+	for _, v := range data.([]interface{}) {
+		items = append(items, h.newItem(v))
+	}
+	return items, nil
 }
 
 // getIndexSetKeys creates a secondary index keys for a resource's filterable fields suited for SET.
