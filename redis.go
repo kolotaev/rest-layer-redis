@@ -14,9 +14,11 @@ import (
 type Handler struct {
 	client     *redis.Client
 	entityName string
+	// needed to determine what secondary indices we are going to create to allow filtering (see predicate.go).
 	filterable []string
-	numeric []string
-	fieldNames 	[]string
+	// needed for SORT type determination.
+	numeric    []string
+	fieldNames []string
 }
 
 // NewHandler creates a new redis handler
@@ -29,13 +31,11 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		// ID is always filterable - needed for queries.
 		if k == "id" {
 			filterable = append(filterable, k)
-		}
-		if v.Filterable {
+		} else if v.Filterable {
 			filterable = append(filterable, k)
 		}
 
 		// Detect possible numeric-value fields
-		// We'll need the for SORT type determination.
 		switch v.Validator.(type) {
 		case schema.Integer, schema.Float:
 			numeric = append(numeric, k)
@@ -75,8 +75,8 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		}
 		// Add secondary indices for filterable fields
 		for _, item := range items {
-			for _, k := range h.getIndexSetKeys(item) {
-				pipe.SAdd(k, h.redisItemKey(item))
+			for _, v := range h.getIndexSetKeys(item) {
+				pipe.SAdd(v, h.redisItemKey(item))
 			}
 			for k, v := range h.getIndexZSetKeys(item) {
 				pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
@@ -95,24 +95,25 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		key, value := h.newRedisItem(item)
 
 		// TODO: original?
-		if err := h.checkPresenceAndEtag(key, original); err != nil {
+		if err := h.checkPresenceAndETag(key, original); err != nil {
 			return err
 		}
 
 		pipe := h.client.Pipeline()
+		// TODO: HSet?
 		pipe.HMSet(key, value)
 
 		// Delete old values from a secondary index.
-		for _, k := range h.getIndexSetKeys(original) {
-			pipe.SRem(k, h.redisItemKey(original))
+		for _, v := range h.getIndexSetKeys(original) {
+			pipe.SRem(v, h.redisItemKey(original))
 		}
 		for k := range h.getIndexZSetKeys(original) {
 			pipe.ZRem(k, h.redisItemKey(original))
 		}
 
 		// Add new values to a secondary index.
-		for _, k := range h.getIndexSetKeys(item) {
-			pipe.SAdd(k, h.redisItemKey(item))
+		for _, v := range h.getIndexSetKeys(item) {
+			pipe.SAdd(v, h.redisItemKey(item))
 		}
 		for k, v := range h.getIndexZSetKeys(item) {
 			pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
@@ -129,7 +130,7 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 	err := handleWithContext(ctx, func() error {
 		key, _ := h.newRedisItem(item)
 
-		if err := h.checkPresenceAndEtag(key, item); err != nil {
+		if err := h.checkPresenceAndETag(key, item); err != nil {
 			return err
 		}
 
@@ -138,8 +139,8 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 
 		// todo - is it atomic?
 		// Delete secondary indices.
-		for _, k := range h.getIndexSetKeys(item) {
-			pipe.SRem(k, h.redisItemKey(item))
+		for _, v := range h.getIndexSetKeys(item) {
+			pipe.SRem(v, h.redisItemKey(item))
 		}
 		for k := range h.getIndexZSetKeys(item) {
 			pipe.ZRem(k, h.redisItemKey(item))
@@ -161,7 +162,7 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 			return err
 		}
 
-	  	luaQuery.addDelete()
+		luaQuery.addDelete()
 
 		var err error
 		qs := redis.NewScript(luaQuery.Script)
@@ -210,6 +211,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			Items: []*resource.Item{},
 		}
 
+		// TODO: add items
 		for _, v := range data.([]interface{}) {
 			result.Items = append(result.Items, h.newItem(v))
 		}
@@ -240,19 +242,6 @@ func (h *Handler) newItem(i interface{}) *resource.Item {
 	return &resource.Item{}
 }
 
-// getIndexZSetKeys creates a secondary index keys for a resource's filterable fields suited for ZSET.
-// Is used so that we can find them when needed.
-// Ex: for users item returns {"users:age": 56, "users:salary": 8000}
-func (h *Handler) getIndexZSetKeys(i *resource.Item) map[string]float64 {
-	result := make(map[string]float64)
-	for _, field := range h.filterable {
-		if value, ok := i.Payload[field]; ok && isNumeric(value) {
-			result[zKey(h.entityName, field)] = value.(float64)
-		}
-	}
-	return result
-}
-
 // getIndexSetKeys creates a secondary index keys for a resource's filterable fields suited for SET.
 // Is used so that we can find them when needed.
 // Ex: for users item returns ["users:hair:brown", "users:city:NYC"]
@@ -266,15 +255,29 @@ func (h *Handler) getIndexSetKeys(i *resource.Item) []string {
 	return result
 }
 
+// getIndexZSetKeys creates a secondary index keys for a resource's filterable fields suited for ZSET.
+// Is used so that we can find them when needed.
+// Ex: for users item returns {"users:age": 56, "users:salary": 8000}
+func (h *Handler) getIndexZSetKeys(i *resource.Item) map[string]float64 {
+	// TODO: float for all?
+	result := make(map[string]float64)
+	for _, field := range h.filterable {
+		if value, ok := i.Payload[field]; ok && isNumeric(value) {
+			result[zKey(h.entityName, field)] = value.(float64)
+		}
+	}
+	return result
+}
+
 // redisItemKey creates a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
 }
 
-// checkPresenceAndEtag checks if record is stored in DB (by its ID) and its Etag is the same as Etag in provided item.
+// checkPresenceAndETag checks if record is stored in DB (by its ID) and its ETag is the same as ETag in provided item.
 // If no result found - no item is stored in the DB.
-// If found - we should compare etags.
-func (h *Handler) checkPresenceAndEtag(key string, item *resource.Item) error {
+// If found - we should compare ETags.
+func (h *Handler) checkPresenceAndETag(key string, item *resource.Item) error {
 	current, err := h.client.HGet(key, "__etag__").Result()
 	// TODO: is it a real not found???
 	if err != nil {
