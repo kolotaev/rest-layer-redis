@@ -234,10 +234,11 @@ func (h *Handler) itemsFromRedisResult(data interface{}) ([]*resource.Item, erro
 	return items, nil
 }
 
-// getIndexSetKeys creates a secondary index keys for a resource's filterable fields suited for SET.
+// indexSetKeys returns a secondary index keys for a resource's filterable fields suited for SET.
 // Is used so that we can find them when needed.
-// Ex: for users item returns ["users:hair:brown", "users:city:NYC"]
-func (h *Handler) getIndexSetKeys(i *resource.Item) []string {
+// Ex: for user A returns ["users:hair:brown", "users:city:NYC"]
+//     for user B returns ["users:hair:red", "users:city:Boston"]
+func (h *Handler) indexSetKeys(i *resource.Item) []string {
 	var result []string
 	for _, field := range h.filterable {
 		if value, ok := i.Payload[field]; ok && !isNumeric(value) {
@@ -247,10 +248,11 @@ func (h *Handler) getIndexSetKeys(i *resource.Item) []string {
 	return result
 }
 
-// getIndexZSetKeys creates a secondary index keys for a resource's filterable fields suited for ZSET.
+// indexZSetKeys returns a secondary index keys for a resource's filterable fields suited for ZSET.
 // Is used so that we can find them when needed.
-// Ex: for users item returns {"users:age": 56, "users:salary": 8000}
-func (h *Handler) getIndexZSetKeys(i *resource.Item) map[string]float64 {
+// Ex: for user A returns {"users:age": 24, "users:salary": 75000}
+//     for user B returns {"users:age": 56, "users:salary": 125000}
+func (h *Handler) indexZSetKeys(i *resource.Item) map[string]float64 {
 	// TODO: float for all?
 	result := make(map[string]float64)
 	for _, field := range h.filterable {
@@ -261,7 +263,29 @@ func (h *Handler) getIndexZSetKeys(i *resource.Item) map[string]float64 {
 	return result
 }
 
-// redisItemKey creates a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
+// addSecondaryIndices adds new values to a secondary index for a given item. Action is appended to a Redis pipeline.
+func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+	itemID := h.redisItemKey(item)
+	for _, v := range h.indexSetKeys(item) {
+		pipe.SAdd(v, v)
+	}
+	for k, v := range h.indexZSetKeys(item) {
+		pipe.ZAdd(k, redis.Z{Member: itemID, Score: v})
+	}
+}
+
+// deleteSecondaryIndices removes a secondary index for a given item. Action is appended to a Redis pipeline.
+func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+	itemID := h.redisItemKey(item)
+	for _, v := range h.indexSetKeys(item) {
+		pipe.SRem(v, itemID)
+	}
+	for k := range h.indexZSetKeys(item) {
+		pipe.ZRem(k, itemID)
+	}
+}
+
+// redisItemKey returns a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
 }
@@ -279,26 +303,6 @@ func (h *Handler) checkPresenceAndETag(key string, item *resource.Item) error {
 		return resource.ErrConflict
 	}
 	return nil
-}
-
-// addSecondaryIndices adds new values to a secondary index for a given item. Action is stacked to a Redis pipeline.
-func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
-	for _, v := range h.getIndexSetKeys(item) {
-		pipe.SAdd(v, h.redisItemKey(item))
-	}
-	for k, v := range h.getIndexZSetKeys(item) {
-		pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
-	}
-}
-
-// deleteSecondaryIndices removes a secondary index for a given item. Action is stacked to a Redis pipeline.
-func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
-	for _, v := range h.getIndexSetKeys(item) {
-		pipe.SRem(v, h.redisItemKey(item))
-	}
-	for k := range h.getIndexZSetKeys(item) {
-		pipe.ZRem(k, h.redisItemKey(item))
-	}
 }
 
 // handleWithContext makes requests to Redis aware of context.
