@@ -57,6 +57,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		for _, item := range items {
 			ids = append(ids, h.redisItemKey(item))
 		}
+		// TODO: is atomic? Add WATCH?
 		duplicates, err := h.client.Exists(ids...).Result()
 		// TODO: is it real not found???
 		if err != nil {
@@ -67,20 +68,18 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		}
 
 		pipe := h.client.TxPipeline()
+
 		// Add hash-records
 		for _, item := range items {
 			key, value := h.newRedisItem(item)
 			pipe.HMSet(key, value)
 		}
+
 		// Add secondary indices for filterable fields
 		for _, item := range items {
-			for _, v := range h.getIndexSetKeys(item) {
-				pipe.SAdd(v, h.redisItemKey(item))
-			}
-			for k, v := range h.getIndexZSetKeys(item) {
-				pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
-			}
+			h.addSecondaryIndices(pipe, item)
 		}
+
 		_, err = pipe.Exec()
 		return err
 	})
@@ -102,21 +101,9 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		// TODO: HSet?
 		pipe.HMSet(key, value)
 
-		// Delete old values from a secondary index.
-		for _, v := range h.getIndexSetKeys(original) {
-			pipe.SRem(v, h.redisItemKey(original))
-		}
-		for k := range h.getIndexZSetKeys(original) {
-			pipe.ZRem(k, h.redisItemKey(original))
-		}
+		h.deleteSecondaryIndices(pipe, original)
+		h.addSecondaryIndices(pipe, item)
 
-		// Add new values to a secondary index.
-		for _, v := range h.getIndexSetKeys(item) {
-			pipe.SAdd(v, h.redisItemKey(item))
-		}
-		for k, v := range h.getIndexZSetKeys(item) {
-			pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
-		}
 		_, err := pipe.Exec()
 		return err
 	})
@@ -137,13 +124,8 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 		pipe.HDel(h.redisItemKey(item))
 
 		// todo - is it atomic?
-		// Delete secondary indices.
-		for _, v := range h.getIndexSetKeys(item) {
-			pipe.SRem(v, h.redisItemKey(item))
-		}
-		for k := range h.getIndexZSetKeys(item) {
-			pipe.ZRem(k, h.redisItemKey(item))
-		}
+		h.deleteSecondaryIndices(pipe, item)
+
 		_, err := pipe.Exec()
 		return err
 	})
@@ -297,6 +279,26 @@ func (h *Handler) checkPresenceAndETag(key string, item *resource.Item) error {
 		return resource.ErrConflict
 	}
 	return nil
+}
+
+// addSecondaryIndices adds new values to a secondary index for a given item. Action is stacked to a Redis pipeline.
+func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+	for _, v := range h.getIndexSetKeys(item) {
+		pipe.SAdd(v, h.redisItemKey(item))
+	}
+	for k, v := range h.getIndexZSetKeys(item) {
+		pipe.ZAdd(k, redis.Z{Score: v, Member: h.redisItemKey(item)})
+	}
+}
+
+// deleteSecondaryIndices removes a secondary index for a given item. Action is stacked to a Redis pipeline.
+func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+	for _, v := range h.getIndexSetKeys(item) {
+		pipe.SRem(v, h.redisItemKey(item))
+	}
+	for k := range h.getIndexZSetKeys(item) {
+		pipe.ZRem(k, h.redisItemKey(item))
+	}
 }
 
 // handleWithContext makes requests to Redis aware of context.
