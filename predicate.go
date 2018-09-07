@@ -106,7 +106,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(entityName, t.Field, v))
 				}
-				// todo: ew don't need local local %[1]s = %[2]s - just inline!
+				// todo: we don't need local local %[1]s = %[2]s - just inline!
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				if next(%[1]s) != nil then
@@ -142,6 +142,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				for _, v := range t.Values {
 					inKeys = append(inKeys, sKey(entityName, t.Field, v))
 				}
+				// todo: we don't need local local %[1]s = %[2]s - just inline!
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				if next(%[1]s) != nil then

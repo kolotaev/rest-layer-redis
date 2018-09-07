@@ -3,6 +3,8 @@ package rds
 import (
 	"context"
 	"fmt"
+	"errors"
+	"reflect"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
@@ -41,10 +43,15 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		}
 
 		// Detect possible numeric-value fields
-		switch v.Validator.(type) {
-		case schema.Integer, schema.Float:
+		// TODO - don't use reflection?
+		t := reflect.TypeOf(v.Validator).Name()
+		if t == "schema.Integer" || t == "schema.Float" {
 			numeric = append(numeric, k)
 		}
+		//switch v.Validator.(type) {
+		//case schema.Integer, schema.Float:
+		//	numeric = append(numeric, k)
+		//}
 	}
 	return &Handler{
 		client:     c,
@@ -151,11 +158,20 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 		luaQuery.addDelete()
 
 		var err error
+		var res interface{}
 		qs := redis.NewScript(luaQuery.Script)
-		result, err = qs.Run(h.client, []string{}).Result()
+		res, err = qs.Run(h.client, []string{}).Result()
 		if err != nil {
 			return err
 		}
+
+		// TODO - make better
+		if resVal, ok := res.(int); !ok {
+			return errors.New("Unknown result")
+		} else {
+			result = resVal
+		}
+
 		return nil
 	})
 	return result, err
@@ -191,9 +207,10 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			return err
 		}
 
-		items, err := h.itemsFromRedisResult(data)
-		if err != nil {
-			return err
+		// TODO: implement properly
+		var items = []*resource.Item{}
+		for _, v := range data.([]interface{}) {
+			items = append(items, h.newItem(v))
 		}
 
 		// TODO - is len(items) correct?
@@ -227,16 +244,6 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 // newItem converts a Redis item from DB into resource.Item
 func (h *Handler) newItem(i interface{}) *resource.Item {
 	return &resource.Item{}
-}
-
-// itemsFromRedisResult converts data-set returned from Redis to a Rest-layer Item collection representation.
-func (h *Handler) itemsFromRedisResult(data interface{}) ([]*resource.Item, error) {
-	var items = []*resource.Item{}
-	// TODO: implement properly
-	for _, v := range data.([]interface{}) {
-		items = append(items, h.newItem(v))
-	}
-	return items, nil
 }
 
 // indexSetKeys returns a secondary index keys for a resource's filterable fields suited for SET.
@@ -273,7 +280,7 @@ func (h *Handler) indexZSetKeys(i *resource.Item) map[string]float64 {
 // - index names to a maintained auxiliary list of item's indices.
 // Action is appended to a Redis pipeline.
 func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
-	var setIndexes, zSetIndexes []string
+	var setIndexes, zSetIndexes []interface{}
 	itemID := h.redisItemKey(item)
 	for _, v := range h.indexSetKeys(item) {
 		pipe.SAdd(v, itemID)
@@ -292,7 +299,7 @@ func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item)
 // - index names to a maintained auxiliary list of item's indices.
 // Action is appended to a Redis pipeline.
 func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
-	var setIndexes, zSetIndexes []string
+	var setIndexes, zSetIndexes []interface{}
 	itemID := h.redisItemKey(item)
 	for _, v := range h.indexSetKeys(item) {
 		pipe.SRem(v, itemID)
@@ -330,7 +337,8 @@ func (h *Handler) checkPresenceAndETag(key string, item *resource.Item) error {
 	if err != nil {
 		return resource.ErrNotFound
 	}
-	if current[0] != item.ETag {
+	// TODO: make type-assertion
+	if string(current[0]) != item.ETag {
 		return resource.ErrConflict
 	}
 	return nil

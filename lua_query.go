@@ -32,14 +32,14 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 	// Redis supports only one sort field.
 	if len(q.Sort) > 1 {
 		// todo - ErrNotImplemented ???
-		return nil, resource.ErrNotImplemented
+		return resource.ErrNotImplemented
 	}
 
 	resultVar := tmpVar()
 
 	// Determine sort direction
 	var sortByField, direction string
-	sortByFieldRaw := q.Sort[0]
+	sortByFieldRaw := q.Sort[0].Name
 	if strings.HasPrefix(sortByFieldRaw, "-") {
 		sortByField = sortByFieldRaw[1:len(sortByFieldRaw)-1]
 		direction = "DESC"
@@ -72,7 +72,7 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 	// Return the result
 	lq.Script += fmt.Sprintf("\n return %s", resultVar)
 
-	return lq, nil
+	return nil
 }
 
 func (lq *LuaQuery) addDelete() {
