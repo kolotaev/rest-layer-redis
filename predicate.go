@@ -109,11 +109,11 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				// todo: we don't need local local %[1]s = %[2]s - just inline!
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
-				if next(%[1]s) != nil then
+				if next(%[1]s) ~= nil then
 					redis.call('SADD', '%[3]s', unpack(%[1]s))
 				end
 				local %[4]s = redis.call('KEYS', '%[5]s')
-				if next(%[4]s) != nil then
+				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[6]s', unpack(%[4]s))
 				end
 				redis.call('SINTERSTORE', '%[7]s', '%[3]s', '%[6]s')
@@ -145,11 +145,11 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				// todo: we don't need local local %[1]s = %[2]s - just inline!
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
-				if next(%[1]s) != nil then
+				if next(%[1]s) ~= nil then
 					redis.call('SADD', '%[3]s', unpack(%[1]s))
 				end
 				local %[4]s = redis.call('KEYS', '%[5]s')
-				if next(%[1]s) != nil then
+				if next(%[1]s) ~= nil then
 					redis.call('SADD', '%[6]s', unpack(%[4]s))
 				end
 				redis.call('SDIFFSTORE', '%[7]s', '%[6]s', '%[3]s')
@@ -162,14 +162,14 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			if isNumeric(t.Value) {
 				result = fmt.Sprintf(`
 				local %[5]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, %[4]d)
-				if next(%[5]s) != nil then
+				if next(%[5]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[5]s))
 				end
 				`, key, zKey(entityName, t.Field), t.Value, t.Value, tmpVar())
 			} else {
 				result = fmt.Sprintf(`
 				local %[3]s = redis.call('SMEMBERS', '%[2]s')
-				if next(%[3]s) != nil then
+				if next(%[3]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[3]s))
 				end
 				`, key, sKey(entityName, t.Field, t.Value), tmpVar())
@@ -193,7 +193,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]s', '+inf')
-				if next(%[4]s) != nil then
+				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())
@@ -202,7 +202,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, '+inf')
-				if next(%[4]s) != nil then
+				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())
@@ -211,7 +211,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]s')
-				if next(%[4]s) != nil then
+				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())
@@ -221,7 +221,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			tempKeys = append(tempKeys, key)
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', %[3]d)
-				if next(%[4]s) != nil then
+				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"errors"
-	"reflect"
+	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
@@ -44,8 +44,8 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 
 		// Detect possible numeric-value fields
 		// TODO - don't use reflection?
-		t := reflect.TypeOf(v.Validator).Name()
-		if t == "schema.Integer" || t == "schema.Float" {
+		t := fmt.Sprintf("%T", v.Validator)
+		if t == "Integer" || t == "Float" {
 			numeric = append(numeric, k)
 		}
 		//switch v.Validator.(type) {
@@ -227,22 +227,30 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 
 // newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
 func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
-	// Filter out id from the payload so we don't store it twice
 	value := map[string]interface{}{}
+
 	for k, v := range i.Payload {
-		if k != "id" {
+		// todo - maybe better time handling?
+		if t, ok := v.(time.Time); ok {
+			t.Nanosecond()
+			//value[k] = t.Nanosecond()
+		} else if k != "id" {
+			// Filter out id from the payload so we don't store it twice
 			value[k] = v
 		}
 	}
+
 	value["__id__"] = i.ID
 	value["__etag__"] = i.ETag
-	value["__updated__"] = i.Updated
+	// TODO we need em?
+	//value["__updated__"] = i.Updated
 
 	return h.redisItemKey(i), value
 }
 
 // newItem converts a Redis item from DB into resource.Item
 func (h *Handler) newItem(i interface{}) *resource.Item {
+	pr(i)
 	return &resource.Item{}
 }
 
@@ -291,7 +299,8 @@ func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item)
 		zSetIndexes = append(zSetIndexes, k)
 	}
 	pipe.SAdd(h.auxIndexListKey(itemID, false), setIndexes...)
-	pipe.SAdd(h.auxIndexListKey(itemID, true), zSetIndexes...)
+	// TODO - why fails on empty?
+	//pipe.SAdd(h.auxIndexListKey(itemID, true), zSetIndexes...)
 }
 
 // deleteSecondaryIndices removes:
@@ -370,4 +379,8 @@ func handleWithContext(ctx context.Context, handler func() error) error {
 		// Wait until Redis command finishes.
 		return err
 	}
+}
+
+func pr(v interface{}) {
+	fmt.Printf("%#v\n", v)
 }

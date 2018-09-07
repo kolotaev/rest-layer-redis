@@ -1,7 +1,6 @@
 package rds_test
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -76,7 +75,7 @@ func Example() {
 
 	_, err := client.Ping().Result()
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
 	index := resource.NewIndex()
