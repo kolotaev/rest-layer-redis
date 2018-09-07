@@ -81,15 +81,33 @@ func (lq *LuaQuery) addDelete() {
 	lq.Script += fmt.Sprintf("\n local %s = redis.call('ZCOUNT', '%s', '-inf', '+ing'", resultVar, lq.LastKey)
 
 	// Delete all the entities we were asked to delete.
+	// Also delete all the secondary indices (and auxiliary lists) for those entities.
 	lq.Script += fmt.Sprintf(`
 		local %[1]s = redis.call('ZRANGE', '%[2]s', 0, -1)
-		-- check that we have at least one item before arguments splice.
-		if next(%[1]s) != nil then
-			redis.call('DEL', unpack(%[1]s))
-		end
-		`, tmpVar(), lq.LastKey)
 
-	// todo - add secondary indices deletion
+		for _, v in %[1]s do
+			-- delete the item itself
+			redis.call('DEL', v)
+
+			-- delete secondary ZSet indices
+			local idx_sorted_name = v .. '%[3]s'
+			local idx_sorted = redis.call('GET', idx_sorted_name)
+			for _, i in idx_sorted do
+				redis.call('ZRem', i)
+			end
+			-- delete auxiliary list of zset (sorted values) indices
+			redis.call('DEL', idx_sorted_name)
+
+			-- delete secondary Set indices
+			local idx_non_sorted_name = v .. '%[4]s'
+			local idx_non_sorted = redis.call('GET', idx_non_sorted_name)
+			for _, i in idx_non_sorted do
+				redis.call('SRem', i)
+			end
+			-- delete auxiliary list of set (non-sorted values) indices
+			redis.call('DEL', idx_non_sorted_name)
+		end
+		`, tmpVar(), lq.LastKey, auxIndexListSortedSuffix, auxIndexListNonSortedSuffix)
 
 	// Delete everything we've created previously
 	lq.deleteTemporaryKeys()

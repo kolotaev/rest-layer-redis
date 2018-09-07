@@ -2,18 +2,16 @@ package rds_test
 
 import (
 	"testing"
+	"fmt"
 
 	rds "github.com/kolotaev/rest-layer-redis"
 
-	"fmt"
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 )
 
-const CONFIG = &redis.Options{
-	Addr: "127.0.0.1:6379",
-}
+const REDIS_ADDRESS = "127.0.0.1:6379"
 
 type cleanupItem struct {
 	values []*resource.Item
@@ -23,7 +21,9 @@ type cleanupItem struct {
 
 // cleanup deletes all the specified items
 func cleanup(items ...cleanupItem) {
-	client := redis.NewClient(CONFIG)
+	client := redis.NewClient(&redis.Options{
+		Addr: REDIS_ADDRESS,
+	})
 	_, err := client.Ping().Result()
 	if err != nil {
 		fmt.Println(err)

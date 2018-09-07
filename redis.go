@@ -10,6 +10,11 @@ import (
 	"github.com/rs/rest-layer/schema/query"
 )
 
+const (
+	auxIndexListSortedSuffix = ":idx_zset_list"
+	auxIndexListNonSortedSuffix = ":idx_set_list"
+)
+
 // Handler handles resource storage in Redis.
 type Handler struct {
 	client     *redis.Client
@@ -263,31 +268,57 @@ func (h *Handler) indexZSetKeys(i *resource.Item) map[string]float64 {
 	return result
 }
 
-// addSecondaryIndices adds new values to a secondary index for a given item. Action is appended to a Redis pipeline.
+// addSecondaryIndices adds:
+// - new values to a secondary index for a given item.
+// - index names to a maintained auxiliary list of item's indices.
+// Action is appended to a Redis pipeline.
 func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+	var setIndexes, zSetIndexes []string
 	itemID := h.redisItemKey(item)
 	for _, v := range h.indexSetKeys(item) {
-		pipe.SAdd(v, v)
+		pipe.SAdd(v, itemID)
+		setIndexes = append(setIndexes, v)
 	}
 	for k, v := range h.indexZSetKeys(item) {
 		pipe.ZAdd(k, redis.Z{Member: itemID, Score: v})
+		zSetIndexes = append(zSetIndexes, k)
 	}
+	pipe.SAdd(h.auxIndexListKey(itemID, false), setIndexes...)
+	pipe.SAdd(h.auxIndexListKey(itemID, true), zSetIndexes...)
 }
 
-// deleteSecondaryIndices removes a secondary index for a given item. Action is appended to a Redis pipeline.
+// deleteSecondaryIndices removes:
+// - a secondary index for a given item.
+// - index names to a maintained auxiliary list of item's indices.
+// Action is appended to a Redis pipeline.
 func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+	var setIndexes, zSetIndexes []string
 	itemID := h.redisItemKey(item)
 	for _, v := range h.indexSetKeys(item) {
 		pipe.SRem(v, itemID)
+		setIndexes = append(setIndexes, v)
 	}
 	for k := range h.indexZSetKeys(item) {
 		pipe.ZRem(k, itemID)
+		zSetIndexes = append(zSetIndexes, k)
 	}
+	// TODO - shouldn't we delete the entire list?
+	pipe.SRem(h.auxIndexListKey(itemID, false), setIndexes...)
+	pipe.SRem(h.auxIndexListKey(itemID, true), zSetIndexes...)
 }
 
 // redisItemKey returns a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
+}
+
+// auxIndexListKey returns a redis-compatible string key to denote a name of an auxiliary indices list of an Item.
+func (h *Handler) auxIndexListKey(key string, sorted bool) string {
+	if sorted {
+		return key + auxIndexListSortedSuffix
+	} else {
+		return key + auxIndexListNonSortedSuffix
+	}
 }
 
 // checkPresenceAndETag checks if record is stored in DB (by its ID) and its ETag is the same as ETag in provided item.
