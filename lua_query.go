@@ -76,6 +76,7 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 
 	// Return the result
 	lq.Script += fmt.Sprintf("\n return %s", resultVar)
+	pr(lq.Script)
 
 	return nil
 }
@@ -122,7 +123,9 @@ func (lq *LuaQuery) addDelete() {
 }
 
 func (lq *LuaQuery) deleteTemporaryKeys() {
-	if len(lq.AllKeys) > 0 {
-		lq.Script = lq.Script + fmt.Sprintf("\n redis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
-	}
+	// Add the main set we used to obtain result to keys marked-for-deletion
+	// todo - isn't it too early?
+	//lq.AllKeys = append(lq.AllKeys, lq.LastKey)
+	pr(makeLuaTableFromStrings(lq.AllKeys))
+	lq.Script = lq.Script + fmt.Sprintf("\n redis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
 }

@@ -42,12 +42,20 @@ func getRangePairs(in []query.Value) []string {
 
 // Get a Lua table definition based on given values.
 func makeLuaTableFromStrings(a []string) string {
-	return fmt.Sprintf("{"+strings.Repeat("'%s',", len(a))+"}", a)
+	aQuoted := make([]string, 0, len(a))
+	for _, v := range a {
+		aQuoted = append(aQuoted, fmt.Sprintf("'%s'", v))
+	}
+	return fmt.Sprintf("{"+strings.Join(aQuoted, ",")+"}")
 }
 
 // Get a Lua table definition based on given values.
 func makeLuaTableFromValues(a []query.Value) string {
-	return fmt.Sprintf("{"+strings.Repeat("'%v',", len(a))+"}", a)
+	aQuoted := make([]string, 0, len(a))
+	for _, v := range a {
+		aQuoted = append(aQuoted, fmt.Sprintf("'%v'", v))
+	}
+	return fmt.Sprintf("{" + strings.Join(aQuoted, ",") + "}")
 }
 
 // Generate random string suited for temporary Lua variable and Redis key

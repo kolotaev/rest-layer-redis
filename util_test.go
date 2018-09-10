@@ -43,6 +43,7 @@ func TestMakeLuaTableFromStrings(t *testing.T) {
 		{[]string{}, ""},
 		{[]string{"a", "b"}, "{a,b}"},
 		{[]string{"a.a", "b.b"}, "{a.a,b.b}"},
+		{[]string{"a.a", "b.b", "c.c"}, "{a.a,b.b,c.c}"},
 	}
 	for i := range cases {
 		tc := cases[i]

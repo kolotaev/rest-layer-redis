@@ -207,6 +207,8 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			return err
 		}
 
+		pr(data)
+
 		// TODO: implement properly
 		var items = []*resource.Item{}
 		for _, v := range data.([]interface{}) {
