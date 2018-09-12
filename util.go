@@ -20,6 +20,20 @@ func isNumeric(v ...query.Value) bool {
 	}
 }
 
+// TODO - better?
+func valueToFloat(v query.Value) float64 {
+	if x, ok := interface{}(v).(int); ok {
+		return float64(x)
+	}
+	if x, ok := interface{}(v).(time.Time); ok {
+		return float64(x.Nanosecond())
+	}
+	if x, ok := interface{}(v).(float64); ok {
+		return x
+	}
+	return -1.0
+}
+
 // getRangePairs creates consequent combinations of ASC-sorted input elements.
 // Is used for creating range tuples for Lua.
 // Ex: [a, c, d, b, e] -> ["{-inf,a}", "{a,b}", "{c,d}", ... "{e,+inf}"]

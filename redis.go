@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"errors"
 	"time"
+	"strconv"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
@@ -13,8 +14,12 @@ import (
 )
 
 const (
-	auxIndexListSortedSuffix = ":idx_zset_list"
-	auxIndexListNonSortedSuffix = ":idx_set_list"
+	auxIndexListSortedSuffix = ":secondary_idx_zset_list"
+	auxIndexListNonSortedSuffix = ":secondary_idx_set_list"
+	
+	IDField = "__id__"
+	ETagField = "__etag__"
+	updatedField = "__updated__"
 )
 
 // Handler handles resource storage in Redis.
@@ -33,7 +38,15 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 	var names, filterable, numeric []string
 
 	for k, v := range schema.Fields {
-		names = append(names, k)
+		if k == "id" {
+			names = append(names, IDField)
+		} else if k == "updated" {
+			names = append(names, updatedField)
+		} else if k == "etag" {
+			names = append(names, ETagField)
+		} else {
+			names = append(names, k)
+		}
 
 		// ID is always filterable - needed for queries.
 		if k == "id" {
@@ -45,7 +58,7 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		// Detect possible numeric-value fields
 		// TODO - don't use reflection?
 		t := fmt.Sprintf("%T", v.Validator)
-		if t == "Integer" || t == "Float" {
+		if t == "Integer" || t == "Float"  || t == "Time"{
 			numeric = append(numeric, k)
 		}
 		//switch v.Validator.(type) {
@@ -207,11 +220,12 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			return err
 		}
 
-		pr(data)
-
 		// TODO: implement properly
 		var items = []*resource.Item{}
-		for _, v := range data.([]interface{}) {
+		d := data.([]interface{})
+
+		for i := 0; i < len(d); i += len(h.fieldNames) {
+			v := d[i:len(h.fieldNames)]
 			items = append(items, h.newItem(v))
 		}
 
@@ -224,6 +238,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 
 		return nil
 	})
+	pr(result.Items[0])
 	return result, err
 }
 
@@ -234,26 +249,66 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	for k, v := range i.Payload {
 		// todo - maybe better time handling?
 		if t, ok := v.(time.Time); ok {
-			t.Nanosecond()
-			//value[k] = t.Nanosecond()
+			//t.Nanosecond()
+			value[k] = t.UnixNano()
 		} else if k != "id" {
 			// Filter out id from the payload so we don't store it twice
 			value[k] = v
 		}
 	}
 
-	value["__id__"] = i.ID
-	value["__etag__"] = i.ETag
+	value[IDField] = i.ID
+	value[ETagField] = i.ETag
 	// TODO we need em?
-	//value["__updated__"] = i.Updated
+	value[updatedField] = i.Updated.UnixNano()
 
 	return h.redisItemKey(i), value
 }
 
 // newItem converts a Redis item from DB into resource.Item
-func (h *Handler) newItem(i interface{}) *resource.Item {
-	pr(i)
-	return &resource.Item{}
+func (h *Handler) newItem(data interface{}) *resource.Item {
+	item := &resource.Item{
+		Payload: make(map[string]interface{}),
+	}
+
+	aInterface, ok := data.([]interface{})
+	if !ok {
+		pr("not []interface{}")
+		return nil
+	}
+	aString := make([]string, len(aInterface))
+	for i, v := range aInterface {
+		a, ok := v.(string)
+		if !ok {
+			pr("not string")
+			return nil
+		}
+		aString[i] = a
+	}
+
+	for i, v := range h.fieldNames {
+		// TODO - need this separation???
+		value := aString[i]
+		if v == IDField {
+			item.ID = value
+		} else if v == ETagField {
+			item.ETag = value
+		} else if v == updatedField {
+			i, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				pr("failed to parse date")
+			} else {
+				tm := time.Unix(i, 0)
+				item.Updated = tm
+			}
+		} else {
+			item.Payload[v] = value
+		}
+	}
+
+	pr(item)
+
+	return item
 }
 
 // indexSetKeys returns a secondary index keys for a resource's filterable fields suited for SET.
@@ -279,7 +334,7 @@ func (h *Handler) indexZSetKeys(i *resource.Item) map[string]float64 {
 	result := make(map[string]float64)
 	for _, field := range h.filterable {
 		if value, ok := i.Payload[field]; ok && isNumeric(value) {
-			result[zKey(h.entityName, field)] = value.(float64)
+			result[zKey(h.entityName, field)] = valueToFloat(value)
 		}
 	}
 	return result
@@ -300,9 +355,12 @@ func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item)
 		pipe.ZAdd(k, redis.Z{Member: itemID, Score: v})
 		zSetIndexes = append(zSetIndexes, k)
 	}
-	pipe.SAdd(h.auxIndexListKey(itemID, false), setIndexes...)
-	// TODO - why fails on empty?
-	//pipe.SAdd(h.auxIndexListKey(itemID, true), zSetIndexes...)
+	if len(setIndexes) > 0 {
+		pipe.SAdd(h.auxIndexListKey(itemID, false), setIndexes...)
+	}
+	if len(zSetIndexes) > 0 {
+		pipe.SAdd(h.auxIndexListKey(itemID, true), zSetIndexes...)
+	}
 }
 
 // deleteSecondaryIndices removes:
@@ -321,8 +379,12 @@ func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.It
 		zSetIndexes = append(zSetIndexes, k)
 	}
 	// TODO - shouldn't we delete the entire list?
-	pipe.SRem(h.auxIndexListKey(itemID, false), setIndexes...)
-	pipe.SRem(h.auxIndexListKey(itemID, true), zSetIndexes...)
+	if len(setIndexes) > 0 {
+		pipe.SRem(h.auxIndexListKey(itemID, false), setIndexes...)
+	}
+	if len(zSetIndexes) > 0 {
+		pipe.SRem(h.auxIndexListKey(itemID, true), zSetIndexes...)
+	}
 }
 
 // redisItemKey returns a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
@@ -334,16 +396,15 @@ func (h *Handler) redisItemKey(i *resource.Item) string {
 func (h *Handler) auxIndexListKey(key string, sorted bool) string {
 	if sorted {
 		return key + auxIndexListSortedSuffix
-	} else {
-		return key + auxIndexListNonSortedSuffix
 	}
+	return key + auxIndexListNonSortedSuffix
 }
 
 // checkPresenceAndETag checks if record is stored in DB (by its ID) and its ETag is the same as ETag in provided item.
 // If no result found - no item is stored in the DB.
 // If found - we should compare ETags.
 func (h *Handler) checkPresenceAndETag(key string, item *resource.Item) error {
-	current, err := h.client.HGet(key, "__etag__").Result()
+	current, err := h.client.HGet(key, ETagField).Result()
 	// TODO: is it a real not found???
 	if err != nil {
 		return resource.ErrNotFound

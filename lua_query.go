@@ -2,7 +2,6 @@ package rds
 
 import (
 	"fmt"
-	"strings"
 	"sort"
 
 	"github.com/rs/rest-layer/resource"
@@ -41,15 +40,12 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 	if len(q.Sort) == 0 {
 		lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY', '%s'", resultVar, lq.LastKey, lq.LastKey)
 	} else {
-		// Determine sort direction
-		var sortByField, direction string
-		sortByFieldRaw := q.Sort[0].Name
-		if strings.HasPrefix(sortByFieldRaw, "-") {
-			sortByField = sortByFieldRaw[1:len(sortByFieldRaw) - 1]
+		// Determine sort direction and sort field
+		// todo - range q.sort - in order to sort by multiple
+		sortByField := q.Sort[0].Name
+		direction := "ASC"
+		if q.Sort[0].Reversed {
 			direction = "DESC"
-		} else {
-			sortByField = sortByFieldRaw
-			direction = "ASC"
 		}
 
 		// First, we are sorting the set with all IDs

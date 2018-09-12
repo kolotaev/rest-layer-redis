@@ -12,7 +12,7 @@ import (
 // TODO: do we need it?
 func getField(f string) string {
 	if f == "id" {
-		return "__id__"
+		return IDField
 	}
 	return f
 }
