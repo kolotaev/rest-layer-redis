@@ -20,6 +20,9 @@ const (
 	IDField = "__id__"
 	ETagField = "__etag__"
 	updatedField = "__updated__"
+
+	// TODO - from time const?
+	dateTimeFormat = "2006-01-02 15:04:05.99999999 -0700 MST"
 )
 
 // Handler handles resource storage in Redis.
@@ -37,13 +40,15 @@ type Handler struct {
 func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
 	var names, filterable, numeric []string
 
+	// add ETag explicitly - it's not in schema.Fields
+	names = append(names, ETagField)
+
+	// TODO - better?
 	for k, v := range schema.Fields {
 		if k == "id" {
 			names = append(names, IDField)
 		} else if k == "updated" {
 			names = append(names, updatedField)
-		} else if k == "etag" {
-			names = append(names, ETagField)
 		} else {
 			names = append(names, k)
 		}
@@ -56,9 +61,9 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		}
 
 		// Detect possible numeric-value fields
-		// TODO - don't use reflection?
+		// TODO - don't use reflection? Use isNumeric?
 		t := fmt.Sprintf("%T", v.Validator)
-		if t == "Integer" || t == "Float"  || t == "Time"{
+		if t == "Integer" || t == "Float"  || t == "Time" {
 			numeric = append(numeric, k)
 		}
 		//switch v.Validator.(type) {
@@ -66,6 +71,7 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		//	numeric = append(numeric, k)
 		//}
 	}
+
 	return &Handler{
 		client:     c,
 		entityName: entityName,
@@ -82,6 +88,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		for _, item := range items {
 			ids = append(ids, h.redisItemKey(item))
 		}
+		// TODO - bulk inserts are not supported by REST-layer now
 		// TODO: is atomic? Add WATCH?
 		duplicates, err := h.client.Exists(ids...).Result()
 		// TODO: is it real not found???
@@ -118,6 +125,7 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		key, value := h.newRedisItem(item)
 
 		// TODO: original?
+		// TODO - is it atomic?
 		if err := h.checkPresenceAndETag(key, original); err != nil {
 			return err
 		}
@@ -141,12 +149,13 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 	err := handleWithContext(ctx, func() error {
 		key, _ := h.newRedisItem(item)
 
+		// TODO - is it atomic?
 		if err := h.checkPresenceAndETag(key, item); err != nil {
 			return err
 		}
 
 		pipe := h.client.TxPipeline()
-		pipe.HDel(h.redisItemKey(item))
+		pipe.Del(h.redisItemKey(item))
 
 		// todo - is it atomic?
 		h.deleteSecondaryIndices(pipe, item)
@@ -238,7 +247,6 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 
 		return nil
 	})
-	pr(result.Items[0])
 	return result, err
 }
 
@@ -250,7 +258,9 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 		// todo - maybe better time handling?
 		if t, ok := v.(time.Time); ok {
 			//t.Nanosecond()
-			value[k] = t.UnixNano()
+			value[k] = t.Format(dateTimeFormat)
+		} else if b, ok := v.(bool); ok {
+			value[k] = fmt.Sprintf("%t", b)
 		} else if k != "id" {
 			// Filter out id from the payload so we don't store it twice
 			value[k] = v
@@ -260,13 +270,15 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	value[IDField] = i.ID
 	value[ETagField] = i.ETag
 	// TODO we need em?
-	value[updatedField] = i.Updated.UnixNano()
+	value[updatedField] = i.Updated.String() // TODO -  time.Parse(dateTimeFormat, value). Move to parser
 
 	return h.redisItemKey(i), value
 }
 
 // newItem converts a Redis item from DB into resource.Item
 func (h *Handler) newItem(data interface{}) *resource.Item {
+	pr("//////////", data)
+
 	item := &resource.Item{
 		Payload: make(map[string]interface{}),
 	}
@@ -291,22 +303,50 @@ func (h *Handler) newItem(data interface{}) *resource.Item {
 		value := aString[i]
 		if v == IDField {
 			item.ID = value
-		} else if v == ETagField {
+			continue
+		}
+		if v == ETagField {
 			item.ETag = value
-		} else if v == updatedField {
-			i, err := strconv.ParseInt(value, 10, 64)
+			continue
+		}
+		if v == updatedField {
+			//i, err := strconv.ParseInt(value, 10, 64)
+			//if err != nil {
+			//	pr("failed to parse date")
+			//} else {
+			//	tm := time.Unix(i, 0)
+			//	item.Updated = tm
+			//}
+
+			ut, err := time.Parse(dateTimeFormat, value)
 			if err != nil {
 				pr("failed to parse date")
 			} else {
-				tm := time.Unix(i, 0)
-				item.Updated = tm
+				item.Updated = ut
 			}
-		} else {
-			item.Payload[v] = value
+			continue
 		}
-	}
 
-	pr(item)
+		// TODO - try to do parsing?
+		if i, err := strconv.ParseInt(value, 10, 64); err == nil {
+			item.Payload[v] = i
+			continue
+		}
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			item.Payload[v] = f
+			continue
+		}
+		// TODO - bools "1" "0"
+		if b, err := strconv.ParseBool(value); err == nil {
+			item.Payload[v] = b
+			continue
+		}
+		if t, err := time.Parse(dateTimeFormat, value); err == nil {
+			item.Payload[v] = t
+			continue
+		}
+		item.Payload[v] = value
+	}
 
 	return item
 }
@@ -319,9 +359,12 @@ func (h *Handler) indexSetKeys(i *resource.Item) []string {
 	var result []string
 	for _, field := range h.filterable {
 		if value, ok := i.Payload[field]; ok && !isNumeric(value) {
+			pr("<<< SET", value)
 			result = append(result, sKey(h.entityName, field, value))
 		}
 	}
+	// TODO - do we need etag? Isn't ID already in filterable?
+	result = append(result, sKey(h.entityName, "id", i.ID))
 	return result
 }
 
@@ -334,9 +377,13 @@ func (h *Handler) indexZSetKeys(i *resource.Item) map[string]float64 {
 	result := make(map[string]float64)
 	for _, field := range h.filterable {
 		if value, ok := i.Payload[field]; ok && isNumeric(value) {
+			pr("<<< ZSET", value)
 			result[zKey(h.entityName, field)] = valueToFloat(value)
 		}
 	}
+	// TODO - do we need etag? Isn't updated already in filterable?
+	result[zKey(h.entityName, "updated")] = valueToFloat(i.Updated)
+
 	return result
 }
 
@@ -406,44 +453,12 @@ func (h *Handler) auxIndexListKey(key string, sorted bool) string {
 func (h *Handler) checkPresenceAndETag(key string, item *resource.Item) error {
 	current, err := h.client.HGet(key, ETagField).Result()
 	// TODO: is it a real not found???
-	if err != nil {
+	if err != nil || current == "" {
 		return resource.ErrNotFound
 	}
-	// TODO: make type-assertion
-	if string(current[0]) != item.ETag {
+	// TODO: make type-assertion?
+	if string(current) != item.ETag {
 		return resource.ErrConflict
 	}
 	return nil
-}
-
-// handleWithContext makes requests to Redis aware of context.
-// Additionally it checks if we already have context error before proceeding further.
-// Rationale: redis-go actually doesn't support context abortion on its operations, though it has WithContext() client.
-// See: https://github.com/go-redis/redis/issues/582
-func handleWithContext(ctx context.Context, handler func() error) error {
-	var err error
-
-	if err = ctx.Err(); err != nil {
-		return err
-	}
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		err = handler()
-	}()
-
-	select {
-	case <-ctx.Done():
-		// Monitor context cancellation. cancellation may happen if the client closed the connection
-		// or if the configured request timeout has been reached.
-		return ctx.Err()
-	case <-done:
-		// Wait until Redis command finishes.
-		return err
-	}
-}
-
-func pr(v interface{}) {
-	fmt.Printf("%#v\n", v)
 }
