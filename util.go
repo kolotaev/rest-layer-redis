@@ -1,13 +1,13 @@
 package rds
 
 import (
+	"context"
 	"fmt"
 	"github.com/rs/rest-layer/schema/query"
 	"math/rand"
 	"sort"
 	"strings"
 	"time"
-	"context"
 )
 
 // Determine if value is numeric.
@@ -61,7 +61,7 @@ func makeLuaTableFromStrings(a []string) string {
 	for _, v := range a {
 		aQuoted = append(aQuoted, fmt.Sprintf("'%s'", v))
 	}
-	return fmt.Sprintf("{"+strings.Join(aQuoted, ",")+"}")
+	return fmt.Sprintf("{" + strings.Join(aQuoted, ",") + "}")
 }
 
 // Get a Lua table definition based on given values.
@@ -130,11 +130,11 @@ func handleWithContext(ctx context.Context, handler func() error) error {
 
 	select {
 	case <-ctx.Done():
-	// Monitor context cancellation. cancellation may happen if the client closed the connection
-	// or if the configured request timeout has been reached.
+		// Monitor context cancellation. cancellation may happen if the client closed the connection
+		// or if the configured request timeout has been reached.
 		return ctx.Err()
 	case <-done:
-	// Wait until Redis command finishes.
+		// Wait until Redis command finishes.
 		return err
 	}
 }

@@ -1,8 +1,8 @@
 package rds_test
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 
 	rds "github.com/kolotaev/rest-layer-redis"
 

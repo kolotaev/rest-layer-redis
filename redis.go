@@ -3,23 +3,23 @@ package rds
 import (
 	"context"
 	"fmt"
-	"errors"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/rs/rest-layer/schema/query"
+	"strconv"
 )
 
 const (
-	auxIndexListSortedSuffix = ":secondary_idx_zset_list"
+	auxIndexListSortedSuffix    = ":secondary_idx_zset_list"
 	auxIndexListNonSortedSuffix = ":secondary_idx_set_list"
 	// TODO - can we use something already existing?
 	allIDsSuffix = "all_ids"
 
 	// TODO - Do we need them?
-	IDField = "__id__"
-	ETagField = "__etag__"
+	IDField      = "__id__"
+	ETagField    = "__etag__"
 	updatedField = "__updated__"
 	payloadField = "__payload__"
 
@@ -36,8 +36,8 @@ type Handler struct {
 	// needed to determine what secondary indices we are going to create to allow filtering (see predicate.go).
 	filterable []string
 	// needed for SORT type determination.
-	numeric    []string
-	sortable   []string
+	numeric  []string
+	sortable []string
 }
 
 // NewHandler creates a new redis handler
@@ -65,7 +65,7 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		// Detect possible numeric-value fields
 		// TODO - don't use reflection? Use isNumeric?
 		t := fmt.Sprintf("%T", v.Validator)
-		if t == "Integer" || t == "Float"  || t == "Time" {
+		if t == "Integer" || t == "Float" || t == "Time" {
 			numeric = append(numeric, k)
 		}
 	}
@@ -75,8 +75,8 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		entityName: entityName,
 		fieldNames: []string{IDField, ETagField, payloadField, updatedField},
 		filterable: filterable,
-		sortable: sortable,
-		numeric: numeric,
+		sortable:   sortable,
+		numeric:    numeric,
 	}
 }
 
@@ -180,7 +180,7 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 			return err
 		}
 
-		luaQuery.addDelete()
+		luaQuery.addDelete(h.entityName)
 
 		var err error
 		var res interface{}
@@ -190,15 +190,12 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 			return err
 		}
 
-
 		// TODO - remove all IDs set
 
-
 		// TODO - make better
-		if resVal, ok := res.(int); !ok {
-			return errors.New("Unknown result")
-		} else {
-			result = resVal
+		result, err = strconv.Atoi(fmt.Sprintf("%d", res))
+		if err != nil {
+			return err
 		}
 
 		return nil
@@ -243,7 +240,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		// chunk data by items
 		chunk := len(h.fieldNames)
 		for i := 0; i < len(d); i += chunk {
-			v := d[i:i+chunk]
+			v := d[i : i+chunk]
 			items = append(items, h.newItem(v))
 		}
 

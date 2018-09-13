@@ -75,39 +75,50 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 	return nil
 }
 
-func (lq *LuaQuery) addDelete() {
-	// Get the count of records that are going to be deleted.
+func (lq *LuaQuery) addDelete(entityName string) {
 	resultVar := tmpVar()
-	lq.Script += fmt.Sprintf("\n local %s = redis.call('ZCOUNT', '%s', '-inf', '+ing'", resultVar, lq.LastKey)
 
 	// Delete all the entities we were asked to delete.
 	// Also delete all the secondary indices (and auxiliary lists) for those entities.
+	// Get and return the count of records that are going to be deleted.
 	lq.Script += fmt.Sprintf(`
-		local %[1]s = redis.call('ZRANGE', '%[2]s', 0, -1)
+		local %[5]s
+		local %[1]s
+		if redis.call('TYPE', '%[2]s') == 'zset' then
+			%[5]s = redis.call('ZCARD', '%[2]s')
+			%[1]s = redis.call('ZRANGE', '%[2]s', 0, -1)
+		else
+			-- If not zset then it's a set
+			%[5]s = redis.call('SCARD', '%[2]s')
+			%[1]s = redis.call('SMEMBERS', '%[2]s')
+		end
 
-		for _, v in %[1]s do
+		for _, v in ipairs(%[1]s) do
 			-- delete the item itself
 			redis.call('DEL', v)
 
 			-- delete secondary ZSet indices
 			local idx_sorted_name = v .. '%[3]s'
-			local idx_sorted = redis.call('GET', idx_sorted_name)
-			for _, i in idx_sorted do
-				redis.call('ZRem', i)
+			local idx_sorted = redis.call('SMEMBERS', idx_sorted_name)
+			for _, i in ipairs(idx_sorted) do
+				redis.call('ZREM', i, v)
 			end
 			-- delete auxiliary list of zset (sorted values) indices
 			redis.call('DEL', idx_sorted_name)
 
 			-- delete secondary Set indices
 			local idx_non_sorted_name = v .. '%[4]s'
-			local idx_non_sorted = redis.call('GET', idx_non_sorted_name)
-			for _, i in idx_non_sorted do
-				redis.call('SRem', i)
+			local idx_non_sorted = redis.call('SMEMBERS', idx_non_sorted_name)
+			for _, i in ipairs(idx_non_sorted) do
+				redis.call('SREM', i, v)
 			end
 			-- delete auxiliary list of set (non-sorted values) indices
 			redis.call('DEL', idx_non_sorted_name)
+
+			-- delete item from all IDs set
+			redis.call('SREM', '%[6]s', v)
 		end
-		`, tmpVar(), lq.LastKey, auxIndexListSortedSuffix, auxIndexListNonSortedSuffix)
+		`, tmpVar(), lq.LastKey, auxIndexListSortedSuffix, auxIndexListNonSortedSuffix, resultVar, sIDsKey(entityName))
 
 	// Delete everything we've created previously
 	lq.deleteTemporaryKeys()

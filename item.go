@@ -1,9 +1,9 @@
 package rds
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
-	"encoding/json"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
