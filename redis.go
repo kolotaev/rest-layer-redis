@@ -14,6 +14,8 @@ import (
 const (
 	auxIndexListSortedSuffix = ":secondary_idx_zset_list"
 	auxIndexListNonSortedSuffix = ":secondary_idx_set_list"
+	// TODO - can we use something already existing?
+	allIDsSuffix = "all_ids"
 
 	// TODO - Do we need them?
 	IDField = "__id__"
@@ -103,11 +105,9 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		for _, item := range items {
 			key, value := h.newRedisItem(item)
 			pipe.HMSet(key, value)
-		}
-
-		// Add secondary indices for filterable fields
-		for _, item := range items {
+			// Add secondary indices for filterable fields
 			h.addSecondaryIndices(pipe, item)
+			h.addIDToAllIDsSet(pipe, item)
 		}
 
 		_, err = pipe.Exec()
@@ -135,6 +135,10 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		h.deleteSecondaryIndices(pipe, original)
 		h.addSecondaryIndices(pipe, item)
 
+		// TODO - we need it?
+		h.deleteIDFromAllIDsSet(pipe, item)
+		h.addIDToAllIDsSet(pipe, original)
+
 		_, err := pipe.Exec()
 		return err
 	})
@@ -157,6 +161,7 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 
 		// todo - is it atomic?
 		h.deleteSecondaryIndices(pipe, item)
+		h.deleteIDFromAllIDsSet(pipe, item)
 
 		_, err := pipe.Exec()
 		return err
@@ -184,6 +189,10 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 		if err != nil {
 			return err
 		}
+
+
+		// TODO - remove all IDs set
+
 
 		// TODO - make better
 		if resVal, ok := res.(int); !ok {
@@ -232,8 +241,9 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		d := data.([]interface{})
 
 		// chunk data by items
-		for i := 0; i < len(d); i += len(h.fieldNames) {
-			v := d[i:len(h.fieldNames)]
+		chunk := len(h.fieldNames)
+		for i := 0; i < len(d); i += chunk {
+			v := d[i:i+chunk]
 			items = append(items, h.newItem(v))
 		}
 

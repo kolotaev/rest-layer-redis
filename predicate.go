@@ -8,15 +8,6 @@ import (
 	"github.com/rs/rest-layer/schema/query"
 )
 
-// getField translates a schema field into a Redis field:
-// TODO: do we need it?
-func getField(f string) string {
-	if f == "id" {
-		return IDField
-	}
-	return f
-}
-
 // normalizePredicate turns implicit AND on list of params of rest-layer query into an explicit AND-predicate
 func normalizePredicate(predicate query.Predicate) query.Predicate {
 	if len(predicate) > 1 {
@@ -29,12 +20,18 @@ func normalizePredicate(predicate query.Predicate) query.Predicate {
 // This results in a Lua query that ultimately creates a Redis sorted-set with the IDs of the items corresponding
 // to the initial query. Also you get a key in which this set is stored and a list a temporary keys
 // you should delete later
+// Return: lastKeyWhereResultCanBeFound, luaQuery, allCreatedKeys, error
 func translatePredicate(entityName string, predicate query.Predicate) (string, string, []string, error) {
 	var tempKeys []string
 	newKey := func() string {
 		k := tmpVar()
 		tempKeys = append(tempKeys, k)
 		return k
+	}
+
+	// If no predicate given (we need all existing items to be retrieved) - use the set of all IDs as a source
+	if len(predicate) == 0 {
+		return sIDsKey(entityName), "", tempKeys, nil
 	}
 
 	for _, exp := range predicate {

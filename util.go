@@ -99,7 +99,7 @@ func sKeyLastAll(entity, key string) string {
 // Get an IDs key name for set of all entity IDs.
 // Ex: users:ids
 func sIDsKey(entity string) string {
-	return fmt.Sprintf("%s:ids", entity)
+	return fmt.Sprintf("%s:%s", entity, allIDsSuffix)
 }
 
 func inSlice(a string, list []string) bool {

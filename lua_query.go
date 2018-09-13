@@ -42,7 +42,7 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 	// If sort is set, it' means we definitely use some real field, not a "nosort"
 	// Determine sort direction and sort field
 	if len(q.Sort) != 0 {
-		sortByField = q.Sort[0].Name
+		sortByField = "*->" + q.Sort[0].Name
 		if q.Sort[0].Reversed {
 			direction = "DESC"
 		}
@@ -54,9 +54,9 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 	// Add sorter field
 	// TODO - inSlice
 	if sort.SearchStrings(numeric, sortByField) > 0 {
-		lq.Script += fmt.Sprintf(", '*->%s', '%s'", sortByField, direction)
+		lq.Script += fmt.Sprintf(", '%s', '%s'", sortByField, direction)
 	} else {
-		lq.Script += fmt.Sprintf(", '*->%s', 'ALPHA', '%s'", sortByField, direction)
+		lq.Script += fmt.Sprintf(", '%s', 'ALPHA', '%s'", sortByField, direction)
 	}
 
 	// Add all fields to a result of a sort
@@ -120,5 +120,7 @@ func (lq *LuaQuery) deleteTemporaryKeys() {
 	// Add the main set we used to obtain result to keys marked-for-deletion
 	// todo - isn't it too early?
 	//lq.AllKeys = append(lq.AllKeys, lq.LastKey)
-	lq.Script = lq.Script + fmt.Sprintf("\n redis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
+	if len(lq.AllKeys) > 0 {
+		lq.Script = lq.Script + fmt.Sprintf("\n redis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
+	}
 }
