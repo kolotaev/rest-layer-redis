@@ -16,7 +16,8 @@ import (
 const (
 	auxIndexListSortedSuffix = ":secondary_idx_zset_list"
 	auxIndexListNonSortedSuffix = ":secondary_idx_set_list"
-	
+
+	// TODO - Do we need them?
 	IDField = "__id__"
 	ETagField = "__etag__"
 	updatedField = "__updated__"
@@ -233,6 +234,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		var items = []*resource.Item{}
 		d := data.([]interface{})
 
+		// chunk data by items
 		for i := 0; i < len(d); i += len(h.fieldNames) {
 			v := d[i:len(h.fieldNames)]
 			items = append(items, h.newItem(v))
@@ -270,26 +272,19 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	value[IDField] = i.ID
 	value[ETagField] = i.ETag
 	// TODO we need em?
-	value[updatedField] = i.Updated.String() // TODO -  time.Parse(dateTimeFormat, value). Move to parser
+	value[updatedField] = i.Updated.Format(dateTimeFormat) // TODO -  Move to parser
 
 	return h.redisItemKey(i), value
 }
 
 // newItem converts a Redis item from DB into resource.Item
-func (h *Handler) newItem(data interface{}) *resource.Item {
-	pr("//////////", data)
-
+func (h *Handler) newItem(data []interface{}) *resource.Item {
 	item := &resource.Item{
 		Payload: make(map[string]interface{}),
 	}
 
-	aInterface, ok := data.([]interface{})
-	if !ok {
-		pr("not []interface{}")
-		return nil
-	}
-	aString := make([]string, len(aInterface))
-	for i, v := range aInterface {
+	aString := make([]string, len(data))
+	for i, v := range data {
 		a, ok := v.(string)
 		if !ok {
 			pr("not string")
@@ -298,54 +293,48 @@ func (h *Handler) newItem(data interface{}) *resource.Item {
 		aString[i] = a
 	}
 
-	for i, v := range h.fieldNames {
+	for i, f := range h.fieldNames {
 		// TODO - need this separation???
+		// TODO - add updated, id and created to a result payload
 		value := aString[i]
-		if v == IDField {
+		if f == IDField {
 			item.ID = value
+			item.Payload["id"] = value
 			continue
 		}
-		if v == ETagField {
+		if f == ETagField {
 			item.ETag = value
 			continue
 		}
-		if v == updatedField {
-			//i, err := strconv.ParseInt(value, 10, 64)
-			//if err != nil {
-			//	pr("failed to parse date")
-			//} else {
-			//	tm := time.Unix(i, 0)
-			//	item.Updated = tm
-			//}
-
+		if f == updatedField {
 			ut, err := time.Parse(dateTimeFormat, value)
 			if err != nil {
 				pr("failed to parse date")
 			} else {
 				item.Updated = ut
+				item.Payload["updated"] = ut
 			}
 			continue
 		}
 
 		// TODO - try to do parsing?
 		if i, err := strconv.ParseInt(value, 10, 64); err == nil {
-			item.Payload[v] = i
+			item.Payload[f] = i
 			continue
 		}
-		if f, err := strconv.ParseFloat(value, 64); err == nil {
-			item.Payload[v] = f
+		if fl, err := strconv.ParseFloat(value, 64); err == nil {
+			item.Payload[f] = fl
 			continue
 		}
-		// TODO - bools "1" "0"
 		if b, err := strconv.ParseBool(value); err == nil {
-			item.Payload[v] = b
+			item.Payload[f] = b
 			continue
 		}
 		if t, err := time.Parse(dateTimeFormat, value); err == nil {
-			item.Payload[v] = t
+			item.Payload[f] = t
 			continue
 		}
-		item.Payload[v] = value
+		item.Payload[f] = value
 	}
 
 	return item

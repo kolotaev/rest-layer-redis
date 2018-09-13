@@ -38,7 +38,7 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 
 	// todo - if sort is empty. Why sort by lastKey. Do it better! ???
 	if len(q.Sort) == 0 {
-		lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY', '%s'", resultVar, lq.LastKey, lq.LastKey)
+		lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY', '%s'", resultVar, lq.LastKey, "nosort")
 	} else {
 		// Determine sort direction and sort field
 		// todo - range q.sort - in order to sort by multiple
