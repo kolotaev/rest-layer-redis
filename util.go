@@ -102,6 +102,15 @@ func sIDsKey(entity string) string {
 	return fmt.Sprintf("%s:ids", entity)
 }
 
+func inSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
 // handleWithContext makes requests to Redis aware of context.
 // Additionally it checks if we already have context error before proceeding further.
 // Rationale: redis-go actually doesn't support context abortion on its operations, though it has WithContext() client.

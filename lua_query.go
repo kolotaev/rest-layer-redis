@@ -34,29 +34,29 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 		return resource.ErrNotImplemented
 	}
 
+	sortByField := "__nosort__"
+	direction := "ASC"
 	resultVar := tmpVar()
 
-	// todo - if sort is empty. Why sort by lastKey. Do it better! ???
-	if len(q.Sort) == 0 {
-		lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY', '%s'", resultVar, lq.LastKey, "nosort")
-	} else {
-		// Determine sort direction and sort field
-		// todo - range q.sort - in order to sort by multiple
-		sortByField := q.Sort[0].Name
-		direction := "ASC"
+	// todo - range q.sort - in order to sort by multiple
+	// If sort is set, it' means we definitely use some real field, not a "nosort"
+	// Determine sort direction and sort field
+	if len(q.Sort) != 0 {
+		sortByField = q.Sort[0].Name
 		if q.Sort[0].Reversed {
 			direction = "DESC"
 		}
+	}
 
-		// First, we are sorting the set with all IDs
-		lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY'", resultVar, lq.LastKey)
+	// First, we are sorting the set with all IDs
+	lq.Script += fmt.Sprintf("\n local %s = redis.call('SORT', '%s', 'BY'", resultVar, lq.LastKey)
 
-		// Add sorter field
-		if sort.SearchStrings(numeric, sortByField) > 0 {
-			lq.Script += fmt.Sprintf(", '*->%s', '%s'", lq.LastKey, direction)
-		} else {
-			lq.Script += fmt.Sprintf(", '*->%s', 'ALPHA', '%s'", lq.LastKey, direction)
-		}
+	// Add sorter field
+	// TODO - inSlice
+	if sort.SearchStrings(numeric, sortByField) > 0 {
+		lq.Script += fmt.Sprintf(", '*->%s', '%s'", sortByField, direction)
+	} else {
+		lq.Script += fmt.Sprintf(", '*->%s', 'ALPHA', '%s'", sortByField, direction)
 	}
 
 	// Add all fields to a result of a sort
@@ -72,8 +72,6 @@ func (lq *LuaQuery) addSortWithLimit(q *query.Query, limit, offset int, fields, 
 
 	// Return the result
 	lq.Script += fmt.Sprintf("\n return %s", resultVar)
-	pr(lq.Script)
-
 	return nil
 }
 
@@ -122,6 +120,5 @@ func (lq *LuaQuery) deleteTemporaryKeys() {
 	// Add the main set we used to obtain result to keys marked-for-deletion
 	// todo - isn't it too early?
 	//lq.AllKeys = append(lq.AllKeys, lq.LastKey)
-	pr(makeLuaTableFromStrings(lq.AllKeys))
 	lq.Script = lq.Script + fmt.Sprintf("\n redis.call('DEL', unpack(%s))", makeLuaTableFromStrings(lq.AllKeys))
 }
