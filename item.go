@@ -165,10 +165,10 @@ func (h *Handler) auxIndexListKey(key string, sorted bool) string {
 // TODO - generalise to secondary idxs?
 // addIDToAllIDsSet adds item's ID to a set of all stored IDs
 func (h *Handler) addIDToAllIDsSet(pipe redis.Pipeliner, i *resource.Item) {
-	pipe.SAdd(sIDsKey(h.entityName), h.redisItemKey(i))
+	pipe.SAdd(sKeyIDsAll(h.entityName), h.redisItemKey(i))
 }
 
 // deleteIDFromAllIDsSet removes item's ID from a set of all stored IDs
 func (h *Handler) deleteIDFromAllIDsSet(pipe redis.Pipeliner, i *resource.Item) {
-	pipe.SRem(sIDsKey(h.entityName), h.redisItemKey(i))
+	pipe.SRem(sKeyIDsAll(h.entityName), h.redisItemKey(i))
 }

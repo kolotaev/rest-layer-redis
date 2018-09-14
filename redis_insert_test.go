@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"testing"
 
-	rds "github.com/kolotaev/rest-layer-redis"
-
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
+
+	rds "github.com/kolotaev/rest-layer-redis"
 )
 
 const REDIS_ADDRESS = "127.0.0.1:6379"
@@ -36,22 +36,7 @@ func cleanup(items ...cleanupItem) {
 	}
 }
 
-func TestDelete(t *testing.T) {
-
-}
 
 func TestInsert(t *testing.T) {
-
-}
-
-func TestUpdate(t *testing.T) {
-
-}
-
-func TestClear(t *testing.T) {
-
-}
-
-func TestFind(t *testing.T) {
 
 }

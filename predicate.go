@@ -31,7 +31,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 
 	// If no predicate given (we need all existing items to be retrieved) - use the set of all IDs as a source
 	if len(predicate) == 0 {
-		return sIDsKey(entityName), "", tempKeys, nil
+		return sKeyIDsAll(entityName), "", tempKeys, nil
 	}
 
 	for _, exp := range predicate {
@@ -183,13 +183,13 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			} else {
 				result = fmt.Sprintf(`
 				 redis.call('SDIFFSTORE', '%s', '%s', '%s')
-				`, key, sIDsKey(entityName), sKey(entityName, t.Field, t.Value))
+				`, key, sKeyIDsAll(entityName), sKey(entityName, t.Field, t.Value))
 			}
 			return key, result, tempKeys, nil
 		case query.GreaterThan:
 			key := newKey()
 			result := fmt.Sprintf(`
-				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]s', '+inf')
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]f', '+inf')
 				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
@@ -198,7 +198,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 		case query.GreaterOrEqual:
 			key := newKey()
 			result := fmt.Sprintf(`
-				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, '+inf')
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]f, '+inf')
 				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
@@ -207,7 +207,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 		case query.LowerThan:
 			key := newKey()
 			result := fmt.Sprintf(`
-				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]s')
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]f')
 				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end
@@ -217,7 +217,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			key := newKey()
 			tempKeys = append(tempKeys, key)
 			result := fmt.Sprintf(`
-				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', %[3]d)
+				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', %[3]f)
 				if next(%[4]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[4]s))
 				end

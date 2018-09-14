@@ -3,20 +3,15 @@ package rds
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/rs/rest-layer/schema/query"
-	"strconv"
 )
 
 const (
-	auxIndexListSortedSuffix    = ":secondary_idx_zset_list"
-	auxIndexListNonSortedSuffix = ":secondary_idx_set_list"
-	// TODO - can we use something already existing?
-	allIDsSuffix = "all_ids"
-
 	// TODO - Do we need them?
 	IDField      = "__id__"
 	ETagField    = "__etag__"
@@ -189,8 +184,6 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 		if err != nil {
 			return err
 		}
-
-		// TODO - remove all IDs set
 
 		// TODO - make better
 		result, err = strconv.Atoi(fmt.Sprintf("%d", res))

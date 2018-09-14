@@ -5,12 +5,12 @@ import (
 	"net/http"
 
 	"github.com/go-redis/redis"
-	"github.com/kolotaev/rest-layer-redis"
-
 	"github.com/rs/cors"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/rest"
 	"github.com/rs/rest-layer/schema"
+
+	"github.com/kolotaev/rest-layer-redis"
 )
 
 var (
