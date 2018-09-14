@@ -98,13 +98,13 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				`, var1, makeLuaTableFromValues(t.Values), zKey(entityName, t.Field), key1)
 				return key1, result, tempKeys, nil
-			} else {
-				var inKeys []string
-				for _, v := range t.Values {
-					inKeys = append(inKeys, sKey(entityName, t.Field, v))
-				}
-				// todo: we don't need local local %[1]s = %[2]s - just inline!
-				result := fmt.Sprintf(`
+			}
+			var inKeys []string
+			for _, v := range t.Values {
+				inKeys = append(inKeys, sKey(entityName, t.Field, v))
+			}
+			// todo: we don't need local local %[1]s = %[2]s - just inline!
+			result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				if next(%[1]s) ~= nil then
 					redis.call('SADD', '%[3]s', unpack(%[1]s))
@@ -115,8 +115,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				redis.call('SINTERSTORE', '%[7]s', '%[3]s', '%[6]s')
 				`, var1, makeLuaTableFromStrings(inKeys), key1, var2, sKeyLastAll(entityName, t.Field), key2, key3)
-				return key3, result, tempKeys, nil
-			}
+			return key3, result, tempKeys, nil
 		case query.NotIn:
 			key1 := newKey()
 			key2 := newKey()
@@ -132,15 +131,15 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				`, makeLuaTableFromStrings(getRangePairs(t.Values)), zKey(entityName, t.Field), key1)
 				return key1, result, tempKeys, nil
-			} else {
-				var inKeys []string
-				var1 := tmpVar()
-				var2 := tmpVar()
-				for _, v := range t.Values {
-					inKeys = append(inKeys, sKey(entityName, t.Field, v))
-				}
-				// todo: we don't need local local %[1]s = %[2]s - just inline!
-				result := fmt.Sprintf(`
+			}
+			var inKeys []string
+			var1 := tmpVar()
+			var2 := tmpVar()
+			for _, v := range t.Values {
+				inKeys = append(inKeys, sKey(entityName, t.Field, v))
+			}
+			// todo: we don't need local local %[1]s = %[2]s - just inline!
+			result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				if next(%[1]s) ~= nil then
 					redis.call('SADD', '%[3]s', unpack(%[1]s))
@@ -151,8 +150,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				redis.call('SDIFFSTORE', '%[7]s', '%[6]s', '%[3]s')
 				`, var1, makeLuaTableFromStrings(inKeys), key1, var2, sKeyLastAll(entityName, t.Field), key2, key3)
-				return key3, result, tempKeys, nil
-			}
+			return key3, result, tempKeys, nil
 		case query.Equal:
 			var result string
 			key := newKey()

@@ -118,7 +118,13 @@ func (lq *LuaQuery) addDelete(entityName string) {
 			-- delete item from all IDs set
 			redis.call('SREM', '%[6]s', v)
 		end
-		`, tmpVar(), lq.LastKey, auxIndexListSortedSuffix, auxIndexListNonSortedSuffix, resultVar, sKeyIDsAll(entityName))
+		`,
+		tmpVar(),
+		lq.LastKey,
+		auxIndexListSortedSuffix,
+		auxIndexListNonSortedSuffix,
+		resultVar,
+		sKeyIDsAll(entityName))
 
 	// Delete everything we've created previously
 	lq.deleteTemporaryKeys()
