@@ -32,3 +32,12 @@ func sKeyLastAll(entity, key string) string {
 func sKeyIDsAll(entity string) string {
 	return fmt.Sprintf("%s:%s", entity, allIDsSuffix)
 }
+
+// auxIndexListKey returns a redis-compatible string key to denote a name of an auxiliary indices list of an Item.
+func auxIndexListKey(itemID string, sorted bool) string {
+	suffix := auxIndexListNonSortedSuffix
+	if sorted {
+		suffix = auxIndexListSortedSuffix
+	}
+	return fmt.Sprintf("%s:%s", itemID, suffix)
+}

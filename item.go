@@ -117,10 +117,10 @@ func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item)
 		zSetIndexes = append(zSetIndexes, k)
 	}
 	if len(setIndexes) > 0 {
-		pipe.SAdd(h.auxIndexListKey(itemID, false), setIndexes...)
+		pipe.SAdd(auxIndexListKey(itemID, false), setIndexes...)
 	}
 	if len(zSetIndexes) > 0 {
-		pipe.SAdd(h.auxIndexListKey(itemID, true), zSetIndexes...)
+		pipe.SAdd(auxIndexListKey(itemID, true), zSetIndexes...)
 	}
 }
 
@@ -141,25 +141,16 @@ func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.It
 	}
 	// TODO - shouldn't we delete the entire list?
 	if len(setIndexes) > 0 {
-		pipe.SRem(h.auxIndexListKey(itemID, false), setIndexes...)
+		pipe.SRem(auxIndexListKey(itemID, false), setIndexes...)
 	}
 	if len(zSetIndexes) > 0 {
-		pipe.SRem(h.auxIndexListKey(itemID, true), zSetIndexes...)
+		pipe.SRem(auxIndexListKey(itemID, true), zSetIndexes...)
 	}
 }
 
 // redisItemKey returns a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
 func (h *Handler) redisItemKey(i *resource.Item) string {
 	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
-}
-
-// auxIndexListKey returns a redis-compatible string key to denote a name of an auxiliary indices list of an Item.
-func (h *Handler) auxIndexListKey(itemID string, sorted bool) string {
-	suffix := auxIndexListNonSortedSuffix
-	if sorted {
-		suffix = auxIndexListSortedSuffix
-	}
-	return fmt.Sprintf("%s:%s", itemID, suffix)
 }
 
 // TODO - generalise to secondary idxs?
