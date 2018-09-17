@@ -122,6 +122,10 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			key3 := newKey()
 
 			if isNumeric(t.Values) {
+				pairs, err := getRangeNumericPairs(t.Values)
+				if err != nil {
+					return "", "", nil, err
+				}
 				result := fmt.Sprintf(`
 				for x = %[1]s do
 					local ys = redis.call('ZRANGEBYSCORE', '%[2]s', '(' .. x[1], '(' .. x[2])
@@ -129,7 +133,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 						redis.call('SADD', '%[3]s', unpack(ys))
 					end
 				end
-				`, makeLuaTableFromStrings(getRangePairs(t.Values)), zKey(entityName, t.Field), key1)
+				`, makeLuaTableFromStrings(pairs), zKey(entityName, t.Field), key1)
 				return key1, result, tempKeys, nil
 			}
 			var inKeys []string

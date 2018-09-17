@@ -1,42 +1,92 @@
 package rds_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/go-redis/redis"
-	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
+	"github.com/stretchr/testify/suite"
 
 	rds "github.com/kolotaev/rest-layer-redis"
 )
 
-const REDIS_ADDRESS = "127.0.0.1:6379"
+const redisAddress = "127.0.0.1:6379"
+const usersEntity = "users"
 
-type cleanupItem struct {
-	values []*resource.Item
-	schema schema.Schema
-	entity string
+var userSchema = schema.Schema{
+	Fields: schema.Fields{
+		"id":      schema.IDField,
+		"created": schema.CreatedField,
+		"updated": schema.UpdatedField,
+		"name": {
+			Required:   true,
+			Filterable: true,
+			Sortable:   true,
+			Validator: &schema.String{
+				MaxLen: 150,
+			},
+		},
+		"age": {
+			Required:   true,
+			Filterable: true,
+			Sortable:   true,
+			Validator: &schema.Integer{},
+		},
+		"birth": {
+			Required:   true,
+			Filterable: true,
+			Sortable:   false,
+			Validator: &schema.Time{},
+		},
+		"height": {
+			Required:   true,
+			Filterable: true,
+			Sortable:   false,
+			Validator: &schema.Float{},
+		},
+		"male": {
+			Required:   true,
+			Filterable: true,
+			Sortable:   true,
+			Default: false,
+			Validator: &schema.Bool{},
+		},
+	},
 }
 
-// cleanup deletes all the specified items
-func cleanup(items ...cleanupItem) {
-	client := redis.NewClient(&redis.Options{
-		Addr: REDIS_ADDRESS,
+type InsertTestSuite struct {
+	suite.Suite
+
+	client *redis.Client
+	handler *rds.Handler
+}
+
+// In order for 'go test' to run this suite, we need to create
+// a normal test function and pass our suite to suite.Run
+func TestInsertTestSuite(t *testing.T) {
+	suite.Run(t, new(InsertTestSuite))
+}
+
+func (s *InsertTestSuite) SetupSuite() {
+	s.client = redis.NewClient(&redis.Options{
+		Addr: redisAddress,
 	})
-	_, err := client.Ping().Result()
+
+	_, err := s.client.Ping().Result()
 	if err != nil {
-		fmt.Println(err)
+		s.T().Fatal(err)
 	}
-	for _, v := range items {
-		h := rds.NewHandler(client, v.entity, v.schema)
-		for _, val := range v.values {
-			h.Delete(nil, val)
-		}
-	}
+
+	s.handler = rds.NewHandler(s.client, usersEntity, userSchema)
+}
+
+// Make sure that Redis DB is clean before each test
+// before each test
+func (s *InsertTestSuite) SetupTest() {
+	s.client.FlushAll()
 }
 
 
-func TestInsert(t *testing.T) {
-
+func (s *InsertTestSuite) TestInsert() {
+	s.NotEqual(90, 89)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"math"
 
 	"github.com/rs/rest-layer/schema/query"
 )
@@ -20,6 +21,7 @@ func isNumeric(v ...query.Value) bool {
 }
 
 // TODO - better?
+// TODO See toFloat64
 func valueToFloat(v query.Value) float64 {
 	if x, ok := interface{}(v).(int); ok {
 		return float64(x)
@@ -31,6 +33,33 @@ func valueToFloat(v query.Value) float64 {
 		return x
 	}
 	return -1.0
+}
+
+func toFloat64(in query.Value) float64 {
+	switch v := in.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	}
+	return math.NaN()
+}
+
+// TODO -1 ?
+func toInt(in query.Value) int {
+	switch v := in.(type) {
+	case int:
+		return v
+	case int8:
+		return int(v)
+	case int16:
+		return int(v)
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	}
+	return -1
 }
 
 func inSlice(a string, list []string) bool {
@@ -61,7 +90,7 @@ func handleWithContext(ctx context.Context, handler func() error) error {
 
 	select {
 	case <-ctx.Done():
-		// Monitor context cancellation. cancellation may happen if the client closed the connection
+		// Monitor context cancellation. Cancellation may happen if the client closed the connection
 		// or if the configured request timeout has been reached.
 		return ctx.Err()
 	case <-done:

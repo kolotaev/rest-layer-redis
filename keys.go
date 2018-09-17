@@ -3,8 +3,8 @@ package rds
 import "fmt"
 
 const (
-	auxIndexListSortedSuffix = ":secondary_idx_zset_list"
-	auxIndexListNonSortedSuffix = ":secondary_idx_set_list"
+	auxIndexListSortedSuffix = "secondary_idx_zset_list"
+	auxIndexListNonSortedSuffix = "secondary_idx_set_list"
 	// TODO - can we use something already existing?
 	allIDsSuffix = "all_ids"
 )

@@ -61,7 +61,7 @@ func (h *Handler) newItem(data []interface{}) *resource.Item {
 		}
 	}
 
-	// explicitly add ID tp a payload
+	// explicitly add ID to a payload
 	payload["id"] = item.ID
 
 	return item
@@ -154,12 +154,12 @@ func (h *Handler) redisItemKey(i *resource.Item) string {
 }
 
 // auxIndexListKey returns a redis-compatible string key to denote a name of an auxiliary indices list of an Item.
-func (h *Handler) auxIndexListKey(key string, sorted bool) string {
+func (h *Handler) auxIndexListKey(itemID string, sorted bool) string {
+	suffix := auxIndexListNonSortedSuffix
 	if sorted {
-		// TODO - use semicolon here
-		return key + auxIndexListSortedSuffix
+		suffix = auxIndexListSortedSuffix
 	}
-	return key + auxIndexListNonSortedSuffix
+	return fmt.Sprintf("%s:%s", itemID, suffix)
 }
 
 // TODO - generalise to secondary idxs?
