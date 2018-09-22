@@ -2,15 +2,26 @@ package rds
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
+	"fmt"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
 )
 
-// newRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
-func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}) {
+type ItemManager struct {
+	EntityName string
+	// TODO - not needed with json
+	FieldNames []string
+	// needed to determine what secondary indices we are going to create to allow filtering (see predicate.go).
+	Filterable []string
+	// needed for SORT type determination.
+	Numeric    []string
+	Sortable   []string
+} 
+
+// NewRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
+func (im *ItemManager) NewRedisItem(i *resource.Item) (string, map[string]interface{}) {
 	value := map[string]interface{}{}
 	payload := map[string]interface{}{}
 
@@ -20,7 +31,7 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 			payload[k] = v
 		}
 
-		if inSlice(k, h.sortable) {
+		if inSlice(k, im.Sortable) {
 			if t, ok := v.(time.Time); ok {
 				v = t.UnixNano()
 			}
@@ -35,15 +46,15 @@ func (h *Handler) newRedisItem(i *resource.Item) (string, map[string]interface{}
 	// TODO deal with _
 	value[payloadField], _ = json.Marshal(payload)
 
-	return h.redisItemKey(i), value
+	return im.RedisItemKey(i), value
 }
 
-// newItem converts a Redis item from DB into resource.Item
-func (h *Handler) newItem(data []interface{}) *resource.Item {
+// NewItem converts a Redis item from DB into resource.Item
+func (im *ItemManager) NewItem(data []interface{}) *resource.Item {
 	payload := make(map[string]interface{})
 	item := new(resource.Item)
 
-	for i, v := range h.fieldNames {
+	for i, v := range im.FieldNames {
 		value := data[i].(string)
 		if v == payloadField {
 			json.Unmarshal([]byte(value), &payload)
@@ -67,52 +78,57 @@ func (h *Handler) newItem(data []interface{}) *resource.Item {
 	return item
 }
 
-// indexSetKeys returns a secondary index keys for a resource's filterable fields suited for SET.
+// RedisItemKey returns a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
+func (im *ItemManager) RedisItemKey(i *resource.Item) string {
+	return fmt.Sprintf("%s:%s", im.EntityName, i.ID)
+}
+
+// IndexSetKeys returns a secondary index keys for a resource's filterable fields suited for SET.
 // Is used so that we can find them when needed.
 // Ex: for user A returns ["users:hair:brown", "users:city:NYC"]
 //     for user B returns ["users:hair:red", "users:city:Boston"]
-func (h *Handler) indexSetKeys(i *resource.Item) []string {
+func (im *ItemManager) IndexSetKeys(i *resource.Item) []string {
 	var result []string
-	for _, field := range h.filterable {
+	for _, field := range im.Filterable {
 		if value, ok := i.Payload[field]; ok && !isNumeric(value) {
-			result = append(result, sKey(h.entityName, field, value))
+			result = append(result, sKey(im.EntityName, field, value))
 		}
 	}
 	// TODO - do we need etag? Isn't ID already in filterable?
-	result = append(result, sKey(h.entityName, "id", i.ID))
+	result = append(result, sKey(im.EntityName, "id", i.ID))
 	return result
 }
 
-// indexZSetKeys returns a secondary index keys for a resource's filterable fields suited for ZSET.
+// IndexZSetKeys returns a secondary index keys for a resource's filterable fields suited for ZSET.
 // Is used so that we can find them when needed.
 // Ex: for user A returns {"users:age": 24, "users:salary": 75000}
 //     for user B returns {"users:age": 56, "users:salary": 125000}
-func (h *Handler) indexZSetKeys(i *resource.Item) map[string]float64 {
+func (im *ItemManager) IndexZSetKeys(i *resource.Item) map[string]float64 {
 	// TODO: float for all?
 	result := make(map[string]float64)
-	for _, field := range h.filterable {
+	for _, field := range im.Filterable {
 		if value, ok := i.Payload[field]; ok && isNumeric(value) {
-			result[zKey(h.entityName, field)] = valueToFloat(value)
+			result[zKey(im.EntityName, field)] = valueToFloat(value)
 		}
 	}
 	// TODO - do we need etag? Isn't updated already in filterable?
-	result[zKey(h.entityName, "updated")] = valueToFloat(i.Updated)
+	result[zKey(im.EntityName, "updated")] = valueToFloat(i.Updated)
 
 	return result
 }
 
-// addSecondaryIndices adds:
+// AddSecondaryIndices adds:
 // - new values to a secondary index for a given item.
 // - index names to a maintained auxiliary list of item's indices.
 // Action is appended to a Redis pipeline.
-func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+func (im *ItemManager) AddSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
 	var setIndexes, zSetIndexes []interface{}
-	itemID := h.redisItemKey(item)
-	for _, v := range h.indexSetKeys(item) {
+	itemID := im.RedisItemKey(item)
+	for _, v := range im.IndexSetKeys(item) {
 		pipe.SAdd(v, itemID)
 		setIndexes = append(setIndexes, v)
 	}
-	for k, v := range h.indexZSetKeys(item) {
+	for k, v := range im.IndexZSetKeys(item) {
 		pipe.ZAdd(k, redis.Z{Member: itemID, Score: v})
 		zSetIndexes = append(zSetIndexes, k)
 	}
@@ -124,18 +140,18 @@ func (h *Handler) addSecondaryIndices(pipe redis.Pipeliner, item *resource.Item)
 	}
 }
 
-// deleteSecondaryIndices removes:
+// DeleteSecondaryIndices removes:
 // - a secondary index for a given item.
 // - index names to a maintained auxiliary list of item's indices.
 // Action is appended to a Redis pipeline.
-func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
+func (im *ItemManager) DeleteSecondaryIndices(pipe redis.Pipeliner, item *resource.Item) {
 	var setIndexes, zSetIndexes []interface{}
-	itemID := h.redisItemKey(item)
-	for _, v := range h.indexSetKeys(item) {
+	itemID := im.RedisItemKey(item)
+	for _, v := range im.IndexSetKeys(item) {
 		pipe.SRem(v, itemID)
 		setIndexes = append(setIndexes, v)
 	}
-	for k := range h.indexZSetKeys(item) {
+	for k := range im.IndexZSetKeys(item) {
 		pipe.ZRem(k, itemID)
 		zSetIndexes = append(zSetIndexes, k)
 	}
@@ -148,18 +164,13 @@ func (h *Handler) deleteSecondaryIndices(pipe redis.Pipeliner, item *resource.It
 	}
 }
 
-// redisItemKey returns a redis-compatible string key to denote a Hash key of an item. E.g. 'users:1234'.
-func (h *Handler) redisItemKey(i *resource.Item) string {
-	return fmt.Sprintf("%s:%s", h.entityName, i.ID)
+// TODO - generalize to secondary idxs?
+// AddIDToAllIDsSet adds item's ID to a set of all stored IDs
+func (im *ItemManager) AddIDToAllIDsSet(pipe redis.Pipeliner, i *resource.Item) {
+	pipe.SAdd(sKeyIDsAll(im.EntityName), im.RedisItemKey(i))
 }
 
-// TODO - generalise to secondary idxs?
-// addIDToAllIDsSet adds item's ID to a set of all stored IDs
-func (h *Handler) addIDToAllIDsSet(pipe redis.Pipeliner, i *resource.Item) {
-	pipe.SAdd(sKeyIDsAll(h.entityName), h.redisItemKey(i))
-}
-
-// deleteIDFromAllIDsSet removes item's ID from a set of all stored IDs
-func (h *Handler) deleteIDFromAllIDsSet(pipe redis.Pipeliner, i *resource.Item) {
-	pipe.SRem(sKeyIDsAll(h.entityName), h.redisItemKey(i))
+// DeleteIDFromAllIDsSet removes item's ID from a set of all stored IDs
+func (im *ItemManager) DeleteIDFromAllIDsSet(pipe redis.Pipeliner, i *resource.Item) {
+	pipe.SRem(sKeyIDsAll(im.EntityName), im.RedisItemKey(i))
 }

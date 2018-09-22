@@ -25,23 +25,12 @@ const (
 // Handler handles resource storage in Redis.
 type Handler struct {
 	client     *redis.Client
-	entityName string
-	// TODO - not needed with json
-	fieldNames []string
-	// needed to determine what secondary indices we are going to create to allow filtering (see predicate.go).
-	filterable []string
-	// needed for SORT type determination.
-	numeric  []string
-	sortable []string
+	manager *ItemManager
 }
 
 // NewHandler creates a new redis handler
 func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handler {
-	var names, filterable, sortable, numeric []string
-
-	// add ETag explicitly - it's not in schema.Fields
-	// TODO - do we need names?
-	names = append(names, ETagField, payloadField)
+	var filterable, sortable, numeric []string
 
 	// TODO - better?
 	for k, v := range schema.Fields {
@@ -67,11 +56,13 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 
 	return &Handler{
 		client:     c,
-		entityName: entityName,
-		fieldNames: []string{IDField, ETagField, payloadField, updatedField},
-		filterable: filterable,
-		sortable:   sortable,
-		numeric:    numeric,
+		manager: &ItemManager{
+			EntityName: entityName,
+			FieldNames: []string{IDField, ETagField, payloadField, updatedField},
+			Filterable: filterable,
+			Sortable:   sortable,
+			Numeric:    numeric,
+		},
 	}
 }
 
@@ -81,7 +72,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 		// Check for duplicates with a bulk request
 		var ids []string
 		for _, item := range items {
-			ids = append(ids, h.redisItemKey(item))
+			ids = append(ids, h.manager.RedisItemKey(item))
 		}
 		// TODO - bulk inserts are not supported by REST-layer now
 		// TODO: is atomic? Add WATCH?
@@ -98,11 +89,11 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 
 		// Add hash-records
 		for _, item := range items {
-			key, value := h.newRedisItem(item)
+			key, value := h.manager.NewRedisItem(item)
 			pipe.HMSet(key, value)
 			// Add secondary indices for filterable fields
-			h.addSecondaryIndices(pipe, item)
-			h.addIDToAllIDsSet(pipe, item)
+			h.manager.AddSecondaryIndices(pipe, item)
+			h.manager.AddIDToAllIDsSet(pipe, item)
 		}
 
 		_, err = pipe.Exec()
@@ -115,7 +106,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 // Update updates item properties in Redis
 func (h Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
 	err := handleWithContext(ctx, func() error {
-		key, value := h.newRedisItem(item)
+		key, value := h.manager.NewRedisItem(item)
 
 		// TODO: original?
 		// TODO - is it atomic?
@@ -127,12 +118,12 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		// TODO: HSet?
 		pipe.HMSet(key, value)
 
-		h.deleteSecondaryIndices(pipe, original)
-		h.addSecondaryIndices(pipe, item)
+		h.manager.DeleteSecondaryIndices(pipe, original)
+		h.manager.AddSecondaryIndices(pipe, item)
 
 		// TODO - we need it?
-		h.deleteIDFromAllIDsSet(pipe, item)
-		h.addIDToAllIDsSet(pipe, original)
+		h.manager.DeleteIDFromAllIDsSet(pipe, item)
+		h.manager.AddIDToAllIDsSet(pipe, original)
 
 		_, err := pipe.Exec()
 		return err
@@ -144,7 +135,7 @@ func (h Handler) Update(ctx context.Context, item *resource.Item, original *reso
 // Delete deletes an item from Redis
 func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 	err := handleWithContext(ctx, func() error {
-		key, _ := h.newRedisItem(item)
+		key, _ := h.manager.NewRedisItem(item)
 
 		// TODO - is it atomic?
 		if err := h.checkPresenceAndETag(key, item); err != nil {
@@ -152,11 +143,11 @@ func (h Handler) Delete(ctx context.Context, item *resource.Item) error {
 		}
 
 		pipe := h.client.TxPipeline()
-		pipe.Del(h.redisItemKey(item))
+		pipe.Del(h.manager.RedisItemKey(item))
 
 		// todo - is it atomic?
-		h.deleteSecondaryIndices(pipe, item)
-		h.deleteIDFromAllIDsSet(pipe, item)
+		h.manager.DeleteSecondaryIndices(pipe, item)
+		h.manager.DeleteIDFromAllIDsSet(pipe, item)
 
 		_, err := pipe.Exec()
 		return err
@@ -171,11 +162,11 @@ func (h Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 	err := handleWithContext(ctx, func() error {
 		luaQuery := new(LuaQuery)
 
-		if err := luaQuery.addSelect(h.entityName, q); err != nil {
+		if err := luaQuery.addSelect(h.manager.EntityName, q); err != nil {
 			return err
 		}
 
-		luaQuery.addDelete(h.entityName)
+		luaQuery.addDelete(h.manager.EntityName)
 
 		var err error
 		var res interface{}
@@ -202,7 +193,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 
 	err := handleWithContext(ctx, func() error {
 		luaQuery := &LuaQuery{}
-		if err := luaQuery.addSelect(h.entityName, q); err != nil {
+		if err := luaQuery.addSelect(h.manager.EntityName, q); err != nil {
 			return err
 		}
 
@@ -216,7 +207,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 			}
 		}
 
-		if err := luaQuery.addSortWithLimit(q, limit, offset, h.fieldNames, h.numeric); err != nil {
+		if err := luaQuery.addSortWithLimit(q, limit, offset, h.manager.FieldNames, h.manager.Numeric); err != nil {
 			return err
 		}
 
@@ -231,10 +222,10 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		d := data.([]interface{})
 
 		// chunk data by items
-		chunk := len(h.fieldNames)
+		chunk := len(h.manager.FieldNames)
 		for i := 0; i < len(d); i += chunk {
 			v := d[i : i+chunk]
-			items = append(items, h.newItem(v))
+			items = append(items, h.manager.NewItem(v))
 		}
 
 		// TODO - is len(items) correct?

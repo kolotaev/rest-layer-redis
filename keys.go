@@ -1,6 +1,8 @@
 package rds
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const (
 	auxIndexListSortedSuffix = "secondary_idx_zset_list"
