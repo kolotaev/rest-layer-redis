@@ -29,8 +29,8 @@ func sKeyLastAll(entity, key string) string {
 	return fmt.Sprintf("%s:%s:*", entity, key)
 }
 
-// Get an IDs key name for set of all entity IDs.
-// Ex: users:ids
+// Get a key for Set of all entities IDs.
+// Ex: users:all_ids
 func sKeyIDsAll(entity string) string {
 	return fmt.Sprintf("%s:%s", entity, allIDsSuffix)
 }

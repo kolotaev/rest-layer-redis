@@ -1,7 +1,6 @@
 package rds
 
 import (
-	"context"
 	"fmt"
 	"time"
 	"math"
@@ -69,34 +68,6 @@ func inSlice(a string, list []string) bool {
 		}
 	}
 	return false
-}
-
-// handleWithContext makes requests to Redis aware of context.
-// Additionally it checks if we already have context error before proceeding further.
-// Rationale: redis-go actually doesn't support context abortion on its operations, though it has WithContext() client.
-// See: https://github.com/go-redis/redis/issues/582
-func handleWithContext(ctx context.Context, handler func() error) error {
-	var err error
-
-	if err = ctx.Err(); err != nil {
-		return err
-	}
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		err = handler()
-	}()
-
-	select {
-	case <-ctx.Done():
-		// Monitor context cancellation. Cancellation may happen if the client closed the connection
-		// or if the configured request timeout has been reached.
-		return ctx.Err()
-	case <-done:
-		// Wait until Redis command finishes.
-		return err
-	}
 }
 
 func pr(v ...interface{}) {

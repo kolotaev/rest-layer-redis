@@ -20,8 +20,7 @@ func TestSKey(t *testing.T) {
 		{"users:students", "bob", "78-90", "users:students:bob:78-90"},
 		{"users_students", "bob", "78-90", "users_students:bob:78-90"},
 	}
-	for i := range cases {
-		tc := cases[i]
+	for i, tc := range cases {
 		assert.Equal(t, tc.want, sKey(tc.entity, tc.key, tc.value), fmt.Sprintf("Test case #%d", i))
 	}
 }
@@ -37,8 +36,7 @@ func TestZKey(t *testing.T) {
 		{"users:students", "bob", "users:students:bob"},
 		{"users_students", "bob", "users_students:bob"},
 	}
-	for i := range cases {
-		tc := cases[i]
+	for i, tc := range cases {
 		assert.Equal(t, tc.want, zKey(tc.entity, tc.key), fmt.Sprintf("Test case #%d", i))
 	}
 }
@@ -54,8 +52,7 @@ func TestSKeyLastAll(t *testing.T) {
 		{"users:students", "bob", "users:students:bob:*"},
 		{"users_students", "bob", "users_students:bob:*"},
 	}
-	for i := range cases {
-		tc := cases[i]
+	for i, tc := range cases {
 		assert.Equal(t, tc.want, sKeyLastAll(tc.entity, tc.key), fmt.Sprintf("Test case #%d", i))
 	}
 }
@@ -70,8 +67,7 @@ func TestSKeyIDsAll(t *testing.T) {
 		{"users:students", "users:students:all_ids"},
 		{"users_students", "users_students:all_ids"},
 	}
-	for i := range cases {
-		tc := cases[i]
+	for i, tc := range cases {
 		assert.Equal(t, tc.want, sKeyIDsAll(tc.entity), fmt.Sprintf("Test case #%d", i))
 	}
 }
