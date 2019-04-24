@@ -94,13 +94,16 @@ func (s *InsertTestSuite) SetupTest() {
 
 
 func (s *InsertTestSuite) TestInsertOne() {
+	updated := time.Now()
+	birth := time.Now()
 	items := []*resource.Item{
 		{
 			ID: "d4uhqvttith6uqnvrrq7",
 			ETag: "asdf",
+			Updated: updated,
 			Payload: map[string]interface{}{
 				"age": 35,
-				"birth": time.Now(),
+				"birth": birth,
 				"height": 185.54576,
 				"name": "Bob",
 				"male": true,

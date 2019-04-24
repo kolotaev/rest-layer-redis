@@ -28,7 +28,7 @@ Create entities of your domain and a resource storage handlers for them:
 
 ```go
 user := schema.Schema{
-		Description: `The user object`,
+		Description: `The User model`,
 		Fields: schema.Fields{
 			"name": {
 				Required: true,
@@ -74,6 +74,6 @@ So it's better you specify `Validator` type for every field - otherwise results 
 
 ## License
 
-Copyright © 2017 Egor Kolotaev.
+Copyright © 2017-2019 Egor Kolotaev.
 
 Distributed under MIT License.

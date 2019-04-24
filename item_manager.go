@@ -59,21 +59,18 @@ func (im *ItemManager) NewItem(data []interface{}) *resource.Item {
 		if v == payloadField {
 			json.Unmarshal([]byte(value), &payload)
 			item.Payload = payload
-			continue
-		}
-		if v == IDField {
+		} else if v == IDField {
 			item.ID = value
-		}
-		if v == ETagField {
+		} else if v == ETagField {
 			item.ETag = value
-		}
-		if v == updatedField {
+		} else if v == updatedField {
 			item.Updated, _ = time.Parse(dateTimeFormat, value)
 		}
 	}
 
-	// explicitly add ID to a payload
+	// explicitly add ID and updated to a payload
 	payload["id"] = item.ID
+	payload["updated"] = item.Updated
 
 	return item
 }

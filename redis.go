@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
@@ -13,13 +14,13 @@ import (
 
 const (
 	// TODO - Do we need them?
-	IDField      = "__id__"
-	ETagField    = "__etag__"
-	updatedField = "__updated__"
-	payloadField = "__payload__"
+	IDField      = "_id"
+	ETagField    = "_etag"
+	updatedField = "_updated"
+	payloadField = "payload"
 
 	// TODO - from time const?
-	dateTimeFormat = "2006-01-02 15:04:05.99999999 -0700 MST"
+	dateTimeFormat = time.RFC3339Nano
 )
 
 // Handler handles resource storage in Redis.
