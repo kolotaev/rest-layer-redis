@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
@@ -13,14 +12,9 @@ import (
 )
 
 const (
-	// TODO - Do we need them?
-	IDField      = "_id"
+	// TODO - Do we need them if we marshall everything?
 	ETagField    = "_etag"
-	updatedField = "_updated"
 	payloadField = "payload"
-
-	// TODO - from time const?
-	dateTimeFormat = time.RFC3339Nano
 )
 
 // Handler handles resource storage in Redis.
@@ -59,7 +53,7 @@ func NewHandler(c *redis.Client, entityName string, schema schema.Schema) *Handl
 		client:     c,
 		manager: &ItemManager{
 			EntityName: entityName,
-			FieldNames: []string{IDField, ETagField, payloadField, updatedField},
+			FieldNames: []string{ETagField, payloadField},
 			Filterable: filterable,
 			Sortable:   sortable,
 			Numeric:    numeric,

@@ -20,7 +20,6 @@ const usersEntity = "users"
 var userSchema = schema.Schema{
 	Fields: schema.Fields{
 		"id":      schema.IDField,
-		"created": schema.CreatedField,
 		"updated": schema.UpdatedField,
 		"name": {
 			Required:   true,
@@ -126,5 +125,29 @@ func (s *InsertTestSuite) TestInsertOne() {
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)
 
-	s.Equal(items[0], res.Items[0])
+	s.Len(res.Items, 1)
+	result := res.Items[0]
+
+	s.Equal("d4uhqvttith6uqnvrrq7", result.ID)
+	s.Equal("asdf", result.ETag)
+	s.Equal(updated.Format(time.RFC3339Nano), result.Updated.Format(time.RFC3339Nano))
+
+	s.Len(result.Payload, 7)
+	s.Equal(35, result.Payload["age"])
+	s.Equal(185.54576, result.Payload["height"])
+	s.Equal("Bob", result.Payload["name"])
+	s.Equal(true, result.Payload["male"])
+	s.Equal("d4uhqvttith6uqnvrrq7", result.Payload["id"])
+	s.IsType(time.Time{}, result.Payload["updated"])
+	if val, ok := result.Payload["updated"].(time.Time); ok {
+		s.Equal(updated.Format(time.RFC3339Nano), val.Format(time.RFC3339Nano))
+	} else {
+		s.Fail(`Payload["updated"] is not of time.Time`)
+	}
+	s.IsType(time.Time{}, result.Payload["birth"])
+	if val, ok := result.Payload["birth"].(time.Time); ok {
+		s.Equal(updated.Format(time.RFC3339Nano), val.Format(time.RFC3339Nano))
+	} else {
+		s.Fail(`Payload["birth"] is not of time.Time`)
+	}
 }

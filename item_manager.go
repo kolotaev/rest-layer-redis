@@ -30,27 +30,20 @@ type ItemManager struct {
 func (im *ItemManager) NewRedisItem(i *resource.Item) (string, map[string]interface{}) {
 	var box bytes.Buffer
 	enc := gob.NewEncoder(&box)
-	value := map[string]interface{}{}
-	payload := map[string]interface{}{}
+	value := make(map[string]interface{})
 
-	for k, v := range i.Payload {
-		if k != "id" {
-			// Filter out id from the payload so we don't store it twice
-			payload[k] = v
-		}
-
-		if inSlice(k, im.Sortable) {
-			if t, ok := v.(time.Time); ok {
-				v = t.UnixNano()
-			}
-			value[k] = v
-		}
+	// Add those fields because we don't want to store them separately,
+	// given that they are needed in the resulting item's payload anyway
+	// todo - does it affect i.Payload ?
+	payload := i.Payload
+	if _, ok := payload["id"]; !ok {
+		payload["id"] = i.ID
+	}
+	if _, ok := payload["updated"]; !ok {
+		payload["updated"] = i.Updated
 	}
 
-	value[IDField] = i.ID
 	value[ETagField] = i.ETag
-	// TODO we need em?
-	value[updatedField] = i.Updated.Format(dateTimeFormat) // TODO -  Move to parser
 	// TODO deal with _
 	_ = enc.Encode(payload)
 	value[payloadField] = box.Bytes()
@@ -67,20 +60,18 @@ func (im *ItemManager) NewItem(data []interface{}) *resource.Item {
 		value := data[i].(string)
 		if v == payloadField {
 			dec := gob.NewDecoder(bytes.NewBufferString(value))
+			// TODO deal with _
 			_ = dec.Decode(&payload)
 			item.Payload = payload
-		} else if v == IDField {
-			item.ID = value
 		} else if v == ETagField {
 			item.ETag = value
-		} else if v == updatedField {
-			item.Updated, _ = time.Parse(dateTimeFormat, value)
 		}
 	}
-
-	// explicitly add ID and updated to a payload
-	payload["id"] = item.ID
-	payload["updated"] = item.Updated
+	item.ID = item.Payload["id"]
+	// todo - may be not OK?
+	if val, ok := item.Payload["updated"].(time.Time); ok {
+		item.Updated = val
+	}
 
 	return item
 }
