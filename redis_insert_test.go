@@ -91,6 +91,12 @@ func (s *InsertTestSuite) SetupTest() {
 	s.client.FlushAll()
 }
 
+// Make sure that Redis DB is clean after each test
+// before each test
+func (s *InsertTestSuite) TeardownTest() {
+	s.client.FlushAll()
+}
+
 
 func (s *InsertTestSuite) TestInsertOne() {
 	updated := time.Now()
