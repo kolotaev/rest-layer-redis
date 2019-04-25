@@ -11,7 +11,7 @@ import (
 	"github.com/rs/rest-layer/resource"
 	"github.com/stretchr/testify/suite"
 
-	rds "github.com/kolotaev/rest-layer-redis"
+	"github.com/kolotaev/rest-layer-redis"
 )
 
 const redisAddress = "127.0.0.1:6379"
@@ -98,25 +98,23 @@ func (s *InsertTestSuite) TeardownTest() {
 }
 
 
-func (s *InsertTestSuite) TestInsertOne() {
+func (s *InsertTestSuite) TestInsert() {
 	updated := time.Now()
 	birth := time.Now()
-	items := []*resource.Item{
-		{
-			ID: "d4uhqvttith6uqnvrrq7",
-			ETag: "asdf",
-			Updated: updated,
-			Payload: map[string]interface{}{
-				"age": 35,
-				"birth": birth,
-				"height": 185.54576,
-				"name": "Bob",
-				"male": true,
-			},
+	item := &resource.Item{
+		ID: "d4uhqvttith6uqnvrrq7",
+		ETag: "asdf",
+		Updated: updated,
+		Payload: map[string]interface{}{
+			"age": 35,
+			"birth": birth,
+			"height": 185.54576,
+			"name": "Bob",
+			"male": true,
 		},
 	}
 
-	err := s.handler.Insert(s.ctx, items)
+	err := s.handler.Insert(s.ctx, []*resource.Item{item})
 	s.NoError(err)
 
 	q := &query.Query{
@@ -152,8 +150,67 @@ func (s *InsertTestSuite) TestInsertOne() {
 	}
 	s.IsType(time.Time{}, result.Payload["birth"])
 	if val, ok := result.Payload["birth"].(time.Time); ok {
-		s.Equal(updated.Format(time.RFC3339Nano), val.Format(time.RFC3339Nano))
+		s.Equal(birth.Format(time.RFC3339Nano), val.Format(time.RFC3339Nano))
 	} else {
 		s.Fail(`Payload["birth"] is not of time.Time`)
 	}
+}
+
+func (s *InsertTestSuite) TestDelete() {
+	bob := &resource.Item{
+		ID: "del_id1",
+		ETag: "asdfq",
+		Payload: map[string]interface{}{
+			"age": 35,
+			"birth": time.Now(),
+			"height": 185.54576,
+			"name": "Bob",
+			"male": true,
+		},
+	}
+	linda := &resource.Item{
+		ID: "del_id2",
+		ETag: "asdfq",
+		Payload: map[string]interface{}{
+			"age": 7,
+			"birth": time.Now(),
+			"height": 55,
+			"name": "Linda",
+		},
+	}
+
+	err := s.handler.Insert(s.ctx, []*resource.Item{bob, linda})
+	s.NoError(err)
+
+
+	// test no errors on deletion
+	err = s.handler.Delete(s.ctx, bob)
+	s.NoError(err)
+
+	// test Bob is wiped away
+	q := &query.Query{
+		Window: &query.Window{Limit: 1},
+		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id1"}},
+	}
+	res, err := s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(0, res.Total)
+	s.Len(res.Items, 0)
+	s.NotZero(s.client.DbSize().Val())
+
+	// test Linda isn't touched
+	q = &query.Query{
+		Window: &query.Window{Limit: 1},
+		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id2"}},
+	}
+	res, err = s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, res.Total)
+	s.Len(res.Items, 1)
+	s.Equal("Linda", res.Items[0].Payload["name"])
+
+	// test no entries left and DB is totally empty
+	err = s.handler.Delete(s.ctx, linda)
+	s.NoError(err)
+	s.Zero(s.client.DbSize().Val())
 }
