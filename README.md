@@ -1,5 +1,8 @@
-# WIP !!!
+# ⚠️ WIP !!!
 # REST Layer Redis Backend
+
+[![Build Status](https://travis-ci.org/kolotaev/rest-layer-redis.svg?branch=master)](https://travis-ci.org/kolotaev/rest-layer-redis)
+[![codecov.io](https://codecov.io/github/kolotaev/rest-layer-redis/coverage.svg?branch=master)](https://codecov.io/github/kolotaev/rest-layer-redis?branch=master)
 
 ## Usage
 
