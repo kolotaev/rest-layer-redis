@@ -213,7 +213,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		}
 
 		// TODO: implement properly
-		var items = []*resource.Item{}
+		items := []*resource.Item{}
 		d := data.([]interface{})
 
 		// chunk data by items
@@ -270,11 +270,11 @@ func handleWithContext(ctx context.Context, handler func() error) error {
 
 	select {
 	case <-ctx.Done():
-	// Monitor context cancellation. Cancellation may happen if the client closed the connection
-	// or if the configured request timeout has been reached.
+		// Monitor context cancellation. Cancellation may happen if the client closed the connection
+		// or if the configured request timeout has been reached.
 		return ctx.Err()
 	case <-done:
-	// Wait until Redis command finishes.
+		// Wait until Redis command finishes.
 		return err
 	}
 }

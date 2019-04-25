@@ -156,6 +156,7 @@ func (s *InsertTestSuite) TestInsert() {
 	}
 }
 
+
 func (s *InsertTestSuite) TestDelete() {
 	bob := &resource.Item{
 		ID: "del_id1",
@@ -214,6 +215,44 @@ func (s *InsertTestSuite) TestDelete() {
 	s.NoError(err)
 	s.Zero(s.client.DbSize().Val())
 }
+
+
+func (s *InsertTestSuite) TestDelete_Conflict() {
+	bob := &resource.Item{
+		ID: "del_id3",
+		ETag: "asdf",
+		Payload: map[string]interface{}{
+			"age": 35,
+			"birth": time.Now(),
+			"height": 185.54576,
+			"name": "Bob",
+			"male": true,
+		},
+	}
+
+	err := s.handler.Insert(s.ctx, []*resource.Item{bob})
+	s.NoError(err)
+
+
+	// test conflict error on deletion
+	bob.ETag = "qwerty"
+	err = s.handler.Delete(s.ctx, bob)
+	s.EqualError(err, "Conflict")
+
+	// test Bob is not wiped away
+	q := &query.Query{
+		Window: &query.Window{Limit: 1},
+		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id3"}},
+	}
+	res, err := s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, res.Total)
+	s.Len(res.Items, 1)
+	s.Equal("del_id3", res.Items[0].ID)
+	s.Equal("asdf", res.Items[0].ETag)
+	s.Equal("Bob", res.Items[0].Payload["name"])
+}
+
 
 func (s *InsertTestSuite) TestUpdate() {
 	bob := &resource.Item{
