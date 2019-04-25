@@ -53,7 +53,7 @@ func getRangeNumericPairs(in []query.Value) ([]string, error) {
 			stringedNums = append(stringedNums, fmt.Sprintf("%.6f", i))
 		}
 	} else {
-		return []string{}, errors.New("Input data has mixed values type. Accepted only integers or only floats")
+		return []string{}, errors.New("input data has mixed values type: accepted only integers or floats")
 	}
 
 	var out []string

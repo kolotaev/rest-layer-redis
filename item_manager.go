@@ -1,13 +1,19 @@
 package rds
 
 import (
-	"encoding/json"
+	"encoding/gob"
 	"time"
 	"fmt"
+	"bytes"
 
 	"github.com/go-redis/redis"
 	"github.com/rs/rest-layer/resource"
 )
+
+// Register all possible types to be gob-ed
+func init() {
+	gob.Register(time.Time{})
+}
 
 type ItemManager struct {
 	EntityName string
@@ -22,6 +28,8 @@ type ItemManager struct {
 
 // NewRedisItem converts a resource.Item into a suitable for go-redis HMSet [key, value] pair
 func (im *ItemManager) NewRedisItem(i *resource.Item) (string, map[string]interface{}) {
+	var box bytes.Buffer
+	enc := gob.NewEncoder(&box)
 	value := map[string]interface{}{}
 	payload := map[string]interface{}{}
 
@@ -44,7 +52,8 @@ func (im *ItemManager) NewRedisItem(i *resource.Item) (string, map[string]interf
 	// TODO we need em?
 	value[updatedField] = i.Updated.Format(dateTimeFormat) // TODO -  Move to parser
 	// TODO deal with _
-	value[payloadField], _ = json.Marshal(payload)
+	_ = enc.Encode(payload)
+	value[payloadField] = box.Bytes()
 
 	return im.RedisItemKey(i), value
 }
@@ -57,7 +66,8 @@ func (im *ItemManager) NewItem(data []interface{}) *resource.Item {
 	for i, v := range im.FieldNames {
 		value := data[i].(string)
 		if v == payloadField {
-			json.Unmarshal([]byte(value), &payload)
+			dec := gob.NewDecoder(bytes.NewBufferString(value))
+			_ = dec.Decode(&payload)
 			item.Payload = payload
 		} else if v == IDField {
 			item.ID = value

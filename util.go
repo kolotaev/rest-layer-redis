@@ -19,8 +19,8 @@ func isNumeric(v ...query.Value) bool {
 	}
 }
 
-// TODO - better?
-// TODO See toFloat64
+// todo - better?
+// todo - See toFloat64
 func valueToFloat(v query.Value) float64 {
 	if x, ok := interface{}(v).(int); ok {
 		return float64(x)
@@ -44,7 +44,7 @@ func toFloat64(in query.Value) float64 {
 	return math.NaN()
 }
 
-// TODO -1 ?
+// todo -1 ?
 func toInt(in query.Value) int {
 	switch v := in.(type) {
 	case int:
