@@ -61,6 +61,7 @@ func toInt(in query.Value) int {
 	return -1
 }
 
+// todo - delete it?
 func inSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
