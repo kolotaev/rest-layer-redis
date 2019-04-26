@@ -87,7 +87,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			var1 := tmpVar()
 			var2 := tmpVar()
 
-			if isNumeric(t.Values) {
+			if isNumeric(t.Values...) {
 				result := fmt.Sprintf(`
 				local %[1]s = %[2]s
 				for x = %[1]s do
@@ -160,7 +160,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			key := newKey()
 			if isNumeric(t.Value) {
 				result = fmt.Sprintf(`
-				local %[5]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]d, %[4]d)
+				local %[5]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]v, %[4]v)
 				if next(%[5]s) ~= nil then
 					redis.call('SADD', '%[1]s', unpack(%[5]s))
 				end

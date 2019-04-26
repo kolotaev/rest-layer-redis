@@ -82,7 +82,7 @@ func (h *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 
 		pipe := h.client.TxPipeline()
 
-		// Add hash-records
+		// Add record and secondary indices
 		for _, item := range items {
 			key, value := h.manager.NewRedisItem(item)
 			pipe.HMSet(key, value)
@@ -187,7 +187,7 @@ func (h Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 	var result *resource.ItemList
 
 	err := handleWithContext(ctx, func() error {
-		luaQuery := &LuaQuery{}
+		luaQuery := new(LuaQuery)
 		if err := luaQuery.addSelect(h.manager.EntityName, q); err != nil {
 			return err
 		}
