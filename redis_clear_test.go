@@ -37,7 +37,7 @@ func (s *RedisMainTestSuite) TestClear() {
 	// test Bob is wiped away by clear
 	q := &query.Query{
 		Window: &query.Window{Limit: 100},
-		Predicate: query.Predicate{query.Equal{Field: "id", Value: "clea_id1"}},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "clea_id1"}},
 	}
 	res, err := s.handler.Clear(s.ctx, q)
 	s.NoError(err)
@@ -47,7 +47,7 @@ func (s *RedisMainTestSuite) TestClear() {
 	// test Linda isn't touched
 	q = &query.Query{
 		Window: &query.Window{Limit: 100},
-		Predicate: query.Predicate{query.Equal{Field: "id", Value: "clea_id2"}},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "clea_id2"}},
 	}
 	resultLinda, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)

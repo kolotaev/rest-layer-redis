@@ -41,7 +41,7 @@ func (s *RedisMainTestSuite) TestDelete() {
 	// test Bob is wiped away
 	q := &query.Query{
 		Window: &query.Window{Limit: 1},
-		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id1"}},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "del_id1"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)
@@ -52,7 +52,7 @@ func (s *RedisMainTestSuite) TestDelete() {
 	// test Linda isn't touched
 	q = &query.Query{
 		Window: &query.Window{Limit: 100},
-		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id2"}},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "del_id2"}},
 	}
 	res, err = s.handler.Find(s.ctx, q)
 	s.NoError(err)
@@ -91,7 +91,7 @@ func (s *RedisMainTestSuite) TestDelete_Conflict() {
 	// test Bob is not wiped away
 	q := &query.Query{
 		Window: &query.Window{Limit: 100},
-		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id3"}},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "del_id3"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)

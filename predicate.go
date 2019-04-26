@@ -11,7 +11,7 @@ import (
 // normalizePredicate turns implicit AND on list of params of rest-layer query into an explicit AND-predicate
 func normalizePredicate(predicate query.Predicate) query.Predicate {
 	if len(predicate) > 1 {
-		return query.Predicate{query.And{predicate}}
+		return query.Predicate{&query.And{predicate}}
 	}
 	return predicate
 }
@@ -36,10 +36,10 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 
 	for _, exp := range predicate {
 		switch t := exp.(type) {
-		case query.And:
+		case *query.And:
 			var subs, keys []string
 			var key string
-			for _, subExp := range t {
+			for _, subExp := range *t {
 				k, res, _, err := translatePredicate(entityName, query.Predicate{subExp})
 				if err != nil {
 					return "", "", nil, err
@@ -58,10 +58,10 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				key = keys[len(keys)-1]
 			}
 			return key, strings.Join(subs, "\n"), tempKeys, nil
-		case query.Or:
+		case *query.Or:
 			var subs, keys []string
 			var key string
-			for _, subExp := range t {
+			for _, subExp := range *t {
 				k, res, _, err := translatePredicate(entityName, query.Predicate{subExp})
 				if err != nil {
 					return "", "", nil, err
@@ -80,7 +80,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				key = keys[len(keys)-1]
 			}
 			return key, strings.Join(subs, "\n"), tempKeys, nil
-		case query.In:
+		case *query.In:
 			key1 := newKey()
 			key2 := newKey()
 			key3 := newKey()
@@ -116,7 +116,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				redis.call('SINTERSTORE', '%[7]s', '%[3]s', '%[6]s')
 				`, var1, makeLuaTableFromStrings(inKeys), key1, var2, sKeyLastAll(entityName, t.Field), key2, key3)
 			return key3, result, tempKeys, nil
-		case query.NotIn:
+		case *query.NotIn:
 			key1 := newKey()
 			key2 := newKey()
 			key3 := newKey()
@@ -155,7 +155,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				redis.call('SDIFFSTORE', '%[7]s', '%[6]s', '%[3]s')
 				`, var1, makeLuaTableFromStrings(inKeys), key1, var2, sKeyLastAll(entityName, t.Field), key2, key3)
 			return key3, result, tempKeys, nil
-		case query.Equal:
+		case *query.Equal:
 			var result string
 			key := newKey()
 			if isNumeric(t.Value) {
@@ -174,7 +174,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				`, key, sKey(entityName, t.Field, t.Value), tmpVar())
 			}
 			return key, result, tempKeys, nil
-		case query.NotEqual:
+		case *query.NotEqual:
 			var result string
 			key := newKey()
 			if isNumeric(t.Value) {
@@ -188,7 +188,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				`, key, sKeyIDsAll(entityName), sKey(entityName, t.Field, t.Value))
 			}
 			return key, result, tempKeys, nil
-		case query.GreaterThan:
+		case *query.GreaterThan:
 			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '(%[3]f', '+inf')
@@ -197,7 +197,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
-		case query.GreaterOrEqual:
+		case *query.GreaterOrEqual:
 			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', %[3]f, '+inf')
@@ -206,7 +206,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
-		case query.LowerThan:
+		case *query.LowerThan:
 			key := newKey()
 			result := fmt.Sprintf(`
 				local %[4]s = redis.call('ZRANGEBYSCORE', '%[2]s', '-inf', '(%[3]f')
@@ -215,7 +215,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 				end
 				`, key, zKey(entityName, t.Field), t.Value, tmpVar())
 			return key, result, tempKeys, nil
-		case query.LowerOrEqual:
+		case *query.LowerOrEqual:
 			key := newKey()
 			tempKeys = append(tempKeys, key)
 			result := fmt.Sprintf(`

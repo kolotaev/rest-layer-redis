@@ -47,9 +47,7 @@ func (s *RedisMainTestSuite) TestUpdate() {
 			Offset: 0,
 			Limit: 100,
 		},
-		Predicate: query.Predicate{
-			query.Equal{Field: "id", Value: "upd_id1"},
-		},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "upd_id1"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)
@@ -103,9 +101,7 @@ func (s *RedisMainTestSuite) TestUpdate_Conflict() {
 			Offset: 0,
 			Limit: 100,
 		},
-		Predicate: query.Predicate{
-			query.Equal{Field: "id", Value: "upd_id1"},
-		},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "upd_id1"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)

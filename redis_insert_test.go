@@ -32,9 +32,7 @@ func (s *RedisMainTestSuite) TestInsert() {
 			Offset: 0,
 			Limit: 100,
 		},
-		Predicate: query.Predicate{
-			query.Equal{Field: "id", Value: "d4uhqvttith6uqnvrrq7"},
-		},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "d4uhqvttith6uqnvrrq7"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)
@@ -90,7 +88,7 @@ func (s *RedisMainTestSuite) TestInsert_Duplicates() {
 	// test Bob is here and is single
 	q := &query.Query{
 		Window: &query.Window{Limit: 100},
-		Predicate: query.Predicate{query.Equal{Field: "id", Value: "ins_id3"}},
+		Predicate: query.Predicate{&query.Equal{Field: "id", Value: "ins_id3"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
 	s.NoError(err)
