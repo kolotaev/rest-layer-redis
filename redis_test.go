@@ -121,7 +121,7 @@ func (s *InsertTestSuite) TestInsert() {
 	q := &query.Query{
 		Window: &query.Window{
 			Offset: 0,
-			Limit: 1,
+			Limit: 100,
 		},
 		Predicate: query.Predicate{
 			query.Equal{Field: "id", Value: "d4uhqvttith6uqnvrrq7"},
@@ -154,6 +154,42 @@ func (s *InsertTestSuite) TestInsert() {
 	} else {
 		s.Fail(`Payload["birth"] is not of time.Time`)
 	}
+}
+
+
+func (s *InsertTestSuite) TestInsert_Duplicates() {
+	bob := &resource.Item{
+		ID: "ins_id3",
+		ETag: "asdf",
+		Payload: map[string]interface{}{
+			"age": 35,
+			"birth": time.Now(),
+			"height": 185.54576,
+			"name": "Bob",
+			"male": true,
+		},
+	}
+
+	err := s.handler.Insert(s.ctx, []*resource.Item{bob})
+	s.NoError(err)
+
+
+	// test conflict error on duplicate insert
+	err = s.handler.Insert(s.ctx, []*resource.Item{bob})
+	s.EqualError(err, "Conflict")
+
+	// test Bob is here and is single
+	q := &query.Query{
+		Window: &query.Window{Limit: 100},
+		Predicate: query.Predicate{query.Equal{Field: "id", Value: "ins_id3"}},
+	}
+	res, err := s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, res.Total)
+	s.Len(res.Items, 1)
+	s.Equal("ins_id3", res.Items[0].ID)
+	s.Equal("asdf", res.Items[0].ETag)
+	s.Equal("Bob", res.Items[0].Payload["name"])
 }
 
 
@@ -201,7 +237,7 @@ func (s *InsertTestSuite) TestDelete() {
 
 	// test Linda isn't touched
 	q = &query.Query{
-		Window: &query.Window{Limit: 1},
+		Window: &query.Window{Limit: 100},
 		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id2"}},
 	}
 	res, err = s.handler.Find(s.ctx, q)
@@ -241,7 +277,7 @@ func (s *InsertTestSuite) TestDelete_Conflict() {
 
 	// test Bob is not wiped away
 	q := &query.Query{
-		Window: &query.Window{Limit: 1},
+		Window: &query.Window{Limit: 100},
 		Predicate: query.Predicate{query.Equal{Field: "id", Value: "del_id3"}},
 	}
 	res, err := s.handler.Find(s.ctx, q)
@@ -291,7 +327,7 @@ func (s *InsertTestSuite) TestUpdate() {
 	q := &query.Query{
 		Window: &query.Window{
 			Offset: 0,
-			Limit: 1,
+			Limit: 100,
 		},
 		Predicate: query.Predicate{
 			query.Equal{Field: "id", Value: "upd_id1"},
@@ -347,7 +383,7 @@ func (s *InsertTestSuite) TestUpdate_Conflict() {
 	q := &query.Query{
 		Window: &query.Window{
 			Offset: 0,
-			Limit: 1,
+			Limit: 100,
 		},
 		Predicate: query.Predicate{
 			query.Equal{Field: "id", Value: "upd_id1"},
@@ -367,4 +403,60 @@ func (s *InsertTestSuite) TestUpdate_Conflict() {
 	s.Equal("Bob", result.Payload["name"])
 	s.Equal(true, result.Payload["male"])
 	s.Equal("upd_id1", result.Payload["id"])
+}
+
+
+
+func (s *InsertTestSuite) TestClear() {
+	bob := &resource.Item{
+		ID: "clea_id1",
+		ETag: "asdfq",
+		Payload: map[string]interface{}{
+			"age": 35,
+			"birth": time.Now(),
+			"height": 185.54576,
+			"name": "Bob",
+			"male": true,
+		},
+	}
+	linda := &resource.Item{
+		ID: "clea_id2",
+		ETag: "asdfq",
+		Payload: map[string]interface{}{
+			"age": 7,
+			"birth": time.Now(),
+			"height": 55,
+			"name": "Linda",
+		},
+	}
+
+	err := s.handler.Insert(s.ctx, []*resource.Item{bob, linda})
+	s.NoError(err)
+
+	// test Bob is wiped away by clear
+	q := &query.Query{
+		Window: &query.Window{Limit: 100},
+		Predicate: query.Predicate{query.Equal{Field: "id", Value: "clea_id1"}},
+	}
+	res, err := s.handler.Clear(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, res)
+	s.NotZero(s.client.DbSize().Val())
+
+	// test Linda isn't touched
+	q = &query.Query{
+		Window: &query.Window{Limit: 100},
+		Predicate: query.Predicate{query.Equal{Field: "id", Value: "clea_id2"}},
+	}
+	resultLinda, err := s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, resultLinda.Total)
+	s.Len(resultLinda.Items, 1)
+	s.Equal("Linda", resultLinda.Items[0].Payload["name"])
+
+	// test no entries left and DB is totally empty when linda is wiped with clear
+	resFinal, err := s.handler.Clear(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, resFinal)
+	s.Zero(s.client.DbSize().Val())
 }
