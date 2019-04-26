@@ -14,6 +14,13 @@ go:
   - 1.12.x
   - tip
 
+script:
+  # - test -z $(gofmt -s -l $GO_FILES)  # Fail if a .go file hasn't been formatted with gofmt
+  - go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+
 matrix:
   allow_failures:
     - go: tip
