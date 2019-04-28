@@ -26,7 +26,7 @@ func getPersons() []*resource.Item {
 		Payload: map[string]interface{}{
 			"age": 7,
 			"birth": time.Now(),
-			"height": 56,
+			"height": 56.8,
 			"name": "Linda",
 		},
 	}
@@ -91,9 +91,22 @@ func (s *RedisMainTestSuite) TestFind_Equal() {
 	s.Equal("find_id1", res.Items[0].ID)
 	s.Equal(19, res.Items[0].Payload["age"])
 	s.Equal("Bob", res.Items[0].Payload["name"])
-	s.Equal("find_id1", res.Items[0].ID)
-	s.Equal(19, res.Items[0].Payload["age"])
-	s.Equal("Bob", res.Items[0].Payload["name"])
+	s.Equal("find_id3", res.Items[1].ID)
+	s.Equal(19, res.Items[1].Payload["age"])
+	s.Equal("Jimmy", res.Items[1].Payload["name"])
+
+	// test can find by float
+	q = &query.Query{
+		Window:    &query.Window{Limit: -1},
+		Predicate: query.Predicate{&query.Equal{Field: "height", Value: 56.8}},
+	}
+	res, err = s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, res.Total)
+	s.Len(res.Items, 1)
+	s.Equal("find_id2", res.Items[0].ID)
+	s.Equal("Linda", res.Items[0].Payload["name"])
+	s.Equal(56.8, res.Items[0].Payload["height"])
 
 	// test can find by string
 	q = &query.Query{
@@ -106,4 +119,56 @@ func (s *RedisMainTestSuite) TestFind_Equal() {
 	s.Len(res.Items, 1)
 	s.Equal("find_id2", res.Items[0].ID)
 	s.Equal("Linda", res.Items[0].Payload["name"])
+}
+
+func (s *RedisMainTestSuite) TestFind_NotEqual() {
+	err := s.handler.Insert(s.ctx, getPersons())
+	s.NoError(err)
+
+	// test can find by integer
+	q := &query.Query{
+		Window:    &query.Window{Limit: -1},
+		Predicate: query.Predicate{&query.NotEqual{Field: "age", Value: 7}},
+	}
+	res, err := s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(2, res.Total)
+	s.Len(res.Items, 2)
+	s.Equal("find_id1", res.Items[0].ID)
+	s.Equal(19, res.Items[0].Payload["age"])
+	s.Equal("Bob", res.Items[0].Payload["name"])
+	s.Equal("find_id3", res.Items[1].ID)
+	s.Equal(19, res.Items[1].Payload["age"])
+	s.Equal("Jimmy", res.Items[1].Payload["name"])
+
+	// test can find by float
+	q = &query.Query{
+		Window:    &query.Window{Limit: -1},
+		Predicate: query.Predicate{&query.NotEqual{Field: "height", Value: 56.8}},
+	}
+	res, err = s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(2, res.Total)
+	s.Len(res.Items, 2)
+	s.Equal("find_id3", res.Items[0].ID)
+	s.Equal(155, res.Items[0].Payload["height"])
+	s.Equal("Jimmy", res.Items[0].Payload["name"])
+	s.Equal("find_id1", res.Items[1].ID)
+	s.Equal(155.3, res.Items[1].Payload["height"])
+	s.Equal("Bob", res.Items[1].Payload["name"])
+
+
+	// test can find by string
+	q = &query.Query{
+		Window:    &query.Window{Limit: -1},
+		Predicate: query.Predicate{&query.NotEqual{Field: "name", Value: "Jimmy"}},
+	}
+	res, err = s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(2, res.Total)
+	s.Len(res.Items, 2)
+	s.Equal("find_id1", res.Items[0].ID)
+	s.Equal("Bob", res.Items[0].Payload["name"])
+	s.Equal("find_id2", res.Items[1].ID)
+	s.Equal("Linda", res.Items[1].Payload["name"])
 }

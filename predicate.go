@@ -180,7 +180,7 @@ func translatePredicate(entityName string, predicate query.Predicate) (string, s
 			if isNumeric(t.Value) {
 				result = fmt.Sprintf(`
 				redis.call('ZUNIONSTORE', '%s', 1, '%s')
-				redis.call('ZREMRANGEBYSCORE', '%s', %d, %d)
+				redis.call('ZREMRANGEBYSCORE', '%s', %v, %v)
 				`, key, zKey(entityName, t.Field), key, t.Value, t.Value)
 			} else {
 				result = fmt.Sprintf(`
