@@ -8,13 +8,15 @@ import (
 	"github.com/rs/rest-layer/resource"
 )
 
+var location, _ = time.LoadLocation("Local")
+
 func getPersons() []*resource.Item {
 	bob := &resource.Item{
 		ID: "find_id1",
 		ETag: "asdf",
 		Payload: map[string]interface{}{
 			"age": 19,
-			"birth": time.Now(),
+			"birth": time.Date(1990, time.April, 1, 1, 32, 59, 789, location),
 			"height": 155.3,
 			"name": "Bob",
 			"male": true,
@@ -25,7 +27,7 @@ func getPersons() []*resource.Item {
 		ETag: "asdfq",
 		Payload: map[string]interface{}{
 			"age": 7,
-			"birth": time.Now(),
+			"birth": time.Date(2019, time.July, 10, 8, 32, 59, 8, location),
 			"height": 56.8,
 			"name": "Linda",
 		},
@@ -35,7 +37,7 @@ func getPersons() []*resource.Item {
 		ETag: "asdfq",
 		Payload: map[string]interface{}{
 			"age": 19,
-			"birth": time.Now(),
+			"birth": time.Date(2123, time.December, 28, 6, 6, 34, 899, location),
 			"height": 155,
 			"male": true,
 			"name": "Jimmy",
@@ -128,6 +130,24 @@ func (s *RedisMainTestSuite) TestFind_Equal() {
 	q = &query.Query{
 		Window:    &query.Window{Limit: -1},
 		Predicate: query.Predicate{&query.Equal{Field: "name", Value: "Linda"}},
+	}
+	res, err = s.handler.Find(s.ctx, q)
+	s.NoError(err)
+	s.Equal(1, res.Total)
+	s.Len(res.Items, 1)
+	s.Equal("find_id2", res.Items[0].ID)
+	s.Equal("Linda", res.Items[0].Payload["name"])
+
+	// test can find by date
+	q = &query.Query{
+		Window:    &query.Window{Limit: -1},
+		Predicate: query.Predicate{
+			&query.Equal{
+				Field: "birth",
+				Value: time.Date(2019, time.July, 10, 8, 32, 59, 8, location),
+			},
+
+		},
 	}
 	res, err = s.handler.Find(s.ctx, q)
 	s.NoError(err)
