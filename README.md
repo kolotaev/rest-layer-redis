@@ -1,9 +1,11 @@
-# ⚠️ WIP !!!
 # REST Layer Redis Backend
 
 [![Build Status](https://travis-ci.org/kolotaev/rest-layer-redis.svg?branch=master)](https://travis-ci.org/kolotaev/rest-layer-redis)
 [![codecov.io](https://codecov.io/github/kolotaev/rest-layer-redis/coverage.svg?branch=master)](https://codecov.io/github/kolotaev/rest-layer-redis?branch=master)
 [![GitHub](https://img.shields.io/github/license/kolotaev/rest-layer-redis.svg)](https://raw.githubusercontent.com/kolotaev/rest-layer-redis/master/LICENSE)
+
+## Status:
+Library is in the early alpha stage.
 
 ## Usage
 
